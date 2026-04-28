@@ -46,6 +46,13 @@ class ForwardSourceHandler {
 
   inline SocketEndpoint getDestination() { return destination; }
 
+  /**
+   * @brief Returns the source endpoint actually bound by the handler. For
+   * requests that asked for port=0 this reflects the OS-assigned port,
+   * not the original 0.
+   */
+  inline const SocketEndpoint& getSource() const { return source; }
+
  protected:
   /** @brief Socket helper used to accept connections on the source endpoint. */
   shared_ptr<SocketHandler> socketHandler;

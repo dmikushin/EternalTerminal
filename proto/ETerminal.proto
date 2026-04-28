@@ -36,6 +36,11 @@ message PortForwardSourceRequest {
 
 message PortForwardSourceResponse {
   optional string error = 1;
+  // For sources whose request specified port=0 (or omitted the port for
+  // a UNIX socket), this is the OS-assigned port the listener actually
+  // bound to. Unset when the request specified a fixed port. Mirrors
+  // OpenSSH's behavior of reporting the dynamic port allocation.
+  optional int32 actual_port = 2;
 }
 
 message PortForwardDestinationRequest {
@@ -65,6 +70,11 @@ message InitialPayload {
 
 message InitialResponse {
   optional string error = 1;
+  // One PortForwardSourceResponse per element of
+  // InitialPayload.reversetunnels, in the same order. Lets the client
+  // surface the OS-assigned port to the user when the reverse-forward
+  // request used port=0.
+  repeated PortForwardSourceResponse reversetunnel_responses = 2;
 }
 
 message ConfigParams {

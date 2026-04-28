@@ -25,6 +25,16 @@ TerminalClient::TerminalClient(
     (*payload.mutable_environmentvariables())[envVar.first] = envVar.second;
   }
 
+  // Tracks which reverse-tunnel requests asked for an OS-assigned port
+  // so we can announce the actual allocation when the server's per-tunnel
+  // PortForwardSourceResponses arrive in the InitialResponse.
+  struct ReverseRequestSummary {
+    bool dynamicPort;
+    string destinationName;
+    int destinationPort;
+  };
+  vector<ReverseRequestSummary> reverseRequestSummaries;
+
   try {
     if (tunnels.length()) {
       // Forward (-t/-L) tunnels: gateway-ports applies, mirroring ssh -g.
@@ -46,6 +56,15 @@ TerminalClient::TerminalClient(
                        << pfsresponse.error();
           continue;
         }
+        // Mirror ssh's behavior of announcing OS-assigned ports for
+        // dynamic (port=0) requests.
+        if (pfsr.has_source() && pfsr.source().has_port() &&
+            pfsr.source().port() == 0 && pfsresponse.has_actual_port()) {
+          CLOG(INFO, "stderr")
+              << "Allocated port " << pfsresponse.actual_port()
+              << " for local forward to " << pfsr.destination().name() << ":"
+              << pfsr.destination().port() << endl;
+        }
       }
     }
     if (reverseTunnels.length()) {
@@ -55,6 +74,16 @@ TerminalClient::TerminalClient(
       // explicit ssh-style "*:port:host:hp" or "0.0.0.0:port:host:hp".
       auto pfsrs = parseRangesToRequests(reverseTunnels);
       for (auto& pfsr : pfsrs) {
+        // Remember which reverse-forward requests asked for a dynamic port
+        // so we can announce the allocation once the server's
+        // PortForwardSourceResponse arrives in the InitialResponse.
+        reverseRequestSummaries.push_back(
+            {pfsr.has_source() && pfsr.source().has_port() &&
+                 pfsr.source().port() == 0,
+             pfsr.has_destination() ? pfsr.destination().name() : string(),
+             pfsr.has_destination() && pfsr.destination().has_port()
+                 ? pfsr.destination().port()
+                 : 0});
         *(payload.add_reversetunnels()) = pfsr;
       }
     }
@@ -124,6 +153,23 @@ TerminalClient::TerminalClient(
                 CLOG(INFO, "stdout") << "Error initializing connection: "
                                      << initialResponse.error() << endl;
                 exit(1);
+              }
+              // Announce ports allocated by the server for any reverse
+              // forwards that requested port=0, mirroring OpenSSH.
+              const int responseCount =
+                  initialResponse.reversetunnel_responses_size();
+              for (size_t i = 0; i < reverseRequestSummaries.size() &&
+                                 static_cast<int>(i) < responseCount;
+                   ++i) {
+                const auto& summary = reverseRequestSummaries[i];
+                const auto& resp = initialResponse.reversetunnel_responses(i);
+                if (summary.dynamicPort && resp.has_actual_port() &&
+                    !resp.has_error()) {
+                  CLOG(INFO, "stderr")
+                      << "Allocated port " << resp.actual_port()
+                      << " for remote forward to " << summary.destinationName
+                      << ":" << summary.destinationPort << endl;
+                }
               }
               fail = false;
               break;

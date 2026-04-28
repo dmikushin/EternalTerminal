@@ -8,9 +8,9 @@
 namespace et {
 TerminalServer::TerminalServer(
     std::shared_ptr<SocketHandler> _socketHandler,
-    const SocketEndpoint &_serverEndpoint,
+    const SocketEndpoint& _serverEndpoint,
     std::shared_ptr<PipeSocketHandler> _pipeSocketHandler,
-    const SocketEndpoint &_routerEndpoint)
+    const SocketEndpoint& _routerEndpoint)
     : ServerConnection(_socketHandler, _serverEndpoint),
       routerEndpoint(_routerEndpoint) {
   terminalRouter = shared_ptr<UserTerminalRouter>(
@@ -99,7 +99,7 @@ void TerminalServer::run() {
 
 void TerminalServer::runJumpHost(
     shared_ptr<ServerClientConnection> serverClientState,
-    const InitialPayload &payload) {
+    const InitialPayload& payload) {
   InitialResponse response;
   serverClientState->writePacket(
       Packet(uint8_t(EtPacketType::INITIAL_RESPONSE), protoToString(response)));
@@ -154,7 +154,7 @@ void TerminalServer::runJumpHost(
           if (terminalSocketHandler->readPacket(terminalFd, &packet)) {
             serverClientState->writePacket(packet);
           }
-        } catch (const std::runtime_error &ex) {
+        } catch (const std::runtime_error& ex) {
           LOG(INFO) << "Terminal session ended" << ex.what();
           run = false;
           break;
@@ -172,7 +172,7 @@ void TerminalServer::runJumpHost(
           try {
             terminalSocketHandler->writePacket(terminalFd, packet);
             VLOG(4) << "Jumphost wrote to router " << terminalFd;
-          } catch (const std::runtime_error &ex) {
+          } catch (const std::runtime_error& ex) {
             LOG(INFO) << "Unix socket died between global daemon and terminal "
                          "router: "
                       << ex.what();
@@ -181,7 +181,7 @@ void TerminalServer::runJumpHost(
           }
         }
       }
-    } catch (const runtime_error &re) {
+    } catch (const runtime_error& re) {
       STERROR << "Jumphost Error: " << re.what();
       CLOG(INFO, "stdout") << "ERROR: " << re.what();
       serverClientState->closeSocket();
@@ -196,7 +196,7 @@ void TerminalServer::runJumpHost(
 
 void TerminalServer::runTerminal(
     shared_ptr<ServerClientConnection> serverClientState,
-    const InitialPayload &payload) {
+    const InitialPayload& payload) {
   auto maybeUserInfo =
       terminalRouter->tryGetInfoForConnection(serverClientState);
   if (!maybeUserInfo) {
@@ -214,13 +214,13 @@ void TerminalServer::runTerminal(
       new PortForwardHandler(serverSocketHandler, pipeSocketHandler));
   map<string, string> environmentVariables;
 
-  for (const auto &envVar : payload.environmentvariables()) {
+  for (const auto& envVar : payload.environmentvariables()) {
     environmentVariables[envVar.first] = envVar.second;
     LOG(INFO) << "SetEnv: " << envVar.first << "=" << envVar.second;
   }
 
   vector<string> pipePaths;
-  for (const PortForwardSourceRequest &pfsr : payload.reversetunnels()) {
+  for (const PortForwardSourceRequest& pfsr : payload.reversetunnels()) {
     string sourceName;
     PortForwardSourceResponse pfsresponse;
     if (pfsr.has_environmentvariable()) {
@@ -237,6 +237,9 @@ void TerminalServer::runTerminal(
           uint8_t(EtPacketType::INITIAL_RESPONSE), protoToString(response)));
       return;
     }
+    // Forward each per-tunnel response to the client so it can announce
+    // OS-assigned ports for port=0 reverse-forward requests.
+    *(response.add_reversetunnel_responses()) = pfsresponse;
     if (pfsr.has_environmentvariable()) {
       environmentVariables[pfsr.environmentvariable()] = sourceName;
       pipePaths.push_back(sourceName);
@@ -258,7 +261,7 @@ void TerminalServer::runTerminal(
       terminalRouter->getSocketHandler();
 
   TermInit termInit;
-  for (auto &it : environmentVariables) {
+  for (auto& it : environmentVariables) {
     *(termInit.add_environmentnames()) = it.first;
     *(termInit.add_environmentvalues()) = it.second;
   }
@@ -333,12 +336,12 @@ void TerminalServer::runTerminal(
       vector<PortForwardDestinationRequest> requests;
       vector<PortForwardData> dataToSend;
       portForwardHandler->update(&requests, &dataToSend);
-      for (auto &pfr : requests) {
+      for (auto& pfr : requests) {
         serverClientState->writePacket(
             Packet(TerminalPacketType::PORT_FORWARD_DESTINATION_REQUEST,
                    protoToString(pfr)));
       }
-      for (auto &pwd : dataToSend) {
+      for (auto& pwd : dataToSend) {
         serverClientState->writePacket(
             Packet(TerminalPacketType::PORT_FORWARD_DATA, protoToString(pwd)));
       }
@@ -396,7 +399,7 @@ void TerminalServer::runTerminal(
           }
         }
       }
-    } catch (const runtime_error &re) {
+    } catch (const runtime_error& re) {
       STERROR << "Error: " << re.what();
       CLOG(INFO, "stdout") << "Error: " << re.what();
       serverClientState->closeSocket();

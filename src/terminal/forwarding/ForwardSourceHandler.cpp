@@ -7,7 +7,28 @@ ForwardSourceHandler::ForwardSourceHandler(
     : socketHandler(_socketHandler),
       source(_source),
       destination(_destination) {
-  socketHandler->listen(source);
+  auto fds = socketHandler->listen(source);
+  // If the request specified port=0, ask the OS which ephemeral port it
+  // actually bound and rewrite the stored endpoint so subsequent
+  // getEndpointFds()/stopListening() lookups (which key on port) succeed.
+  if (source.has_port() && source.port() == 0 && !fds.empty()) {
+    sockaddr_storage assigned;
+    socklen_t alen = sizeof(assigned);
+    if (::getsockname(*fds.begin(), reinterpret_cast<sockaddr*>(&assigned),
+                      &alen) == 0) {
+      int assignedPort = 0;
+      if (assigned.ss_family == AF_INET) {
+        assignedPort =
+            ntohs(reinterpret_cast<sockaddr_in*>(&assigned)->sin_port);
+      } else if (assigned.ss_family == AF_INET6) {
+        assignedPort =
+            ntohs(reinterpret_cast<sockaddr_in6*>(&assigned)->sin6_port);
+      }
+      if (assignedPort != 0) {
+        source.set_port(assignedPort);
+      }
+    }
+  }
 }
 
 ForwardSourceHandler::~ForwardSourceHandler() {

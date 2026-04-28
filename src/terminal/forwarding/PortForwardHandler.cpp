@@ -73,7 +73,15 @@ PortForwardSourceResponse PortForwardHandler::createSource(
       auto handler = shared_ptr<ForwardSourceHandler>(new ForwardSourceHandler(
           networkSocketHandler, source, pfsr.destination()));
       sourceHandlers.push_back(handler);
-      return PortForwardSourceResponse();
+      PortForwardSourceResponse response;
+      // ForwardSourceHandler may have updated `source.port()` in response to
+      // an OS-assigned ephemeral port; expose it back to the caller so port=0
+      // requests can surface the actual allocation (mirrors ssh's
+      // "Allocated port N for forward to ..." behavior).
+      if (handler->getSource().has_port()) {
+        response.set_actual_port(handler->getSource().port());
+      }
+      return response;
     } else {
       if (userid < 0 || groupid < 0) {
         STFATAL
