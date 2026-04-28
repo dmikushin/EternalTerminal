@@ -10,7 +10,7 @@ TEST_CASE("Parses single port forward request", "[TunnelUtils]") {
 
   REQUIRE(requests.size() == 1);
   REQUIRE(requests[0].has_source());
-  REQUIRE(requests[0].source().name() == "localhost");
+  REQUIRE(requests[0].source().name() == "127.0.0.1");
   REQUIRE(requests[0].source().port() == 1000);
   REQUIRE(requests[0].has_destination());
   REQUIRE(requests[0].destination().port() == 2000);
@@ -35,7 +35,7 @@ TEST_CASE("Combo pair plus range", "[TunnelUtils]") {
   REQUIRE(requests.size() == 4);
 
   REQUIRE(requests[0].has_source());
-  REQUIRE(requests[0].source().name() == "localhost");
+  REQUIRE(requests[0].source().name() == "127.0.0.1");
   REQUIRE(requests[0].source().port() == 1000);
   REQUIRE(requests[0].has_destination());
   REQUIRE(requests[0].destination().port() == 2000);
@@ -120,16 +120,56 @@ TEST_CASE("Rejects malformed port forward input", "[TunnelUtils]") {
             "Tunnel argument must have source and destination between a ':'"));
   }
 
-  SECTION("Ssh-style tunneling arg must be 4 parts") {
-    REQUIRE_THROWS_WITH(parseRangesToRequests("8888:0.0.0.0:9999"),
-                        ContainsSubstring("The 4 part ssh-style"));
-  }
-
   SECTION("Ssh-style tunneling arg must use brackets for ipv6 addresses") {
     REQUIRE_THROWS_WITH(
         parseRangesToRequests("::1:8888:0.0.0.0:9999"),
         ContainsSubstring("Ipv6 addresses must be inside of square brackets"));
   }
+}
+
+TEST_CASE("Parses 3-field ssh-style port:host:hostport", "[TunnelUtils]") {
+  SECTION("Single 3-field arg defaults bind to 127.0.0.1") {
+    auto requests = parseRangesToRequests("8888:remote.example.com:9999");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].has_source());
+    REQUIRE(requests[0].source().name() == "127.0.0.1");
+    REQUIRE(requests[0].source().port() == 8888);
+    REQUIRE(requests[0].has_destination());
+    REQUIRE(requests[0].destination().name() == "remote.example.com");
+    REQUIRE(requests[0].destination().port() == 9999);
+  }
+
+  SECTION("3-field works with bracketed IPv6 destination") {
+    auto requests = parseRangesToRequests("8888:[2001:db8::1]:9999");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "127.0.0.1");
+    REQUIRE(requests[0].source().port() == 8888);
+    REQUIRE(requests[0].destination().name() == "2001:db8::1");
+    REQUIRE(requests[0].destination().port() == 9999);
+  }
+}
+
+TEST_CASE("Mixes ssh-style and et-style across comma list", "[TunnelUtils]") {
+  // Previously the comma branch only accepted et-style; this test guards the
+  // unified per-segment dispatcher.
+  auto requests = parseRangesToRequests(
+      "1000:2000,8888:remote:80,[::1]:9000:dst.example:443");
+
+  REQUIRE(requests.size() == 3);
+
+  REQUIRE(requests[0].source().name() == "127.0.0.1");
+  REQUIRE(requests[0].source().port() == 1000);
+  REQUIRE(requests[0].destination().port() == 2000);
+
+  REQUIRE(requests[1].source().name() == "127.0.0.1");
+  REQUIRE(requests[1].source().port() == 8888);
+  REQUIRE(requests[1].destination().name() == "remote");
+  REQUIRE(requests[1].destination().port() == 80);
+
+  REQUIRE(requests[2].source().name() == "::1");
+  REQUIRE(requests[2].source().port() == 9000);
+  REQUIRE(requests[2].destination().name() == "dst.example");
+  REQUIRE(requests[2].destination().port() == 443);
 }
 
 TEST_CASE("Joins tunnel args from multiple -t/-r occurrences",
