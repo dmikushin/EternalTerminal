@@ -86,7 +86,7 @@ class PseudoUserTerminal : public UserTerminal {
     // no requirements for any wait(2) on our part.
     //
     signal(SIGCHLD, SIG_DFL);
-    FATAL_FAIL(execl(terminal.c_str(), terminal.c_str(), "-l", NULL));
+    FATAL_FAIL(execl(terminal.c_str(), terminal.c_str(), "-l", (char *)nullptr));
   }
 
   /** @brief Removes any temporary PTY bookkeeping (utempter). */

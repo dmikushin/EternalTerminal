@@ -22,7 +22,7 @@ void TerminalHandler::start() {
       chdir(pwd->pw_dir);
       string terminal = string(::getenv("SHELL"));
       setenv("HTM_VERSION", ET_VERSION, 1);
-      execl(terminal.c_str(), terminal.c_str(), "-l", NULL);
+      execl(terminal.c_str(), terminal.c_str(), "-l", (char *)nullptr);
       exit(0);
       break;
     }
