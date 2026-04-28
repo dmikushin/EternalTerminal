@@ -333,8 +333,14 @@ else()
     resolv
     atomic
     stdc++fs
-    anl
   )
+  # libanl provides glibc's getaddrinfo_a(3); musl libc does not ship it.
+  # Detect at configure time so ET still links on Alpine / musl toolchains.
+  include(CheckLibraryExists)
+  check_library_exists(anl getaddrinfo_a "" HAVE_LIBANL)
+  if(HAVE_LIBANL)
+    list(APPEND CORE_LIBRARIES anl)
+  endif()
 endif()
 
 IF(Unwind_FOUND)
