@@ -134,4 +134,14 @@ vector<PortForwardSourceRequest> parseRangesToRequests(const string& input) {
   return pfsrs;
 }
 
+string joinTunnelArgs(const vector<string>& parts) {
+  string joined;
+  for (const auto& part : parts) {
+    if (part.empty()) continue;
+    if (!joined.empty()) joined += ",";
+    joined += part;
+  }
+  return joined;
+}
+
 }  // namespace et

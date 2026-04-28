@@ -113,10 +113,11 @@ int main(int argc, char** argv) {
          "srcStart-srcEnd:dstStart-dstEnd (inclusive) port ranges (e.g. "
          "10080:80,10443:443, 10090-10092:8000-8002) or ssh-style -L/-R "
          "argument. Defaults to localhost for bind address unless ssh-style "
-         "tunnel argument is used.",
-         cxxopts::value<std::string>())  //
+         "tunnel argument is used. May be specified multiple times; values "
+         "are concatenated.",
+         cxxopts::value<std::vector<std::string>>())  //
         ("r,reversetunnel", "Reverse Tunnel: See doc for -t/--tunnel.",
-         cxxopts::value<std::string>())  //
+         cxxopts::value<std::vector<std::string>>())  //
         ("jumphost", "jumphost between localhost and destination",
          cxxopts::value<std::string>())  //
         ("jport", "Jumphost machine port",
@@ -361,10 +362,14 @@ int main(int argc, char** argv) {
     }
     TelemetryService::get()->logToDatadog("Session Started", el::Level::Info,
                                           __FILE__, __LINE__);
-    string tunnel_arg =
-        extractSingleOptionWithDefault<string>(result, options, "tunnel", "");
-    string r_tunnel_arg = extractSingleOptionWithDefault<string>(
-        result, options, "reversetunnel", "");
+    auto joinMultiTunnelArg = [&](const string& name) -> string {
+      if (!result.count(name)) {
+        return "";
+      }
+      return joinTunnelArgs(result[name].as<std::vector<std::string>>());
+    };
+    string tunnel_arg = joinMultiTunnelArg("tunnel");
+    string r_tunnel_arg = joinMultiTunnelArg("reversetunnel");
 
     for (const auto& localForward : sshConfigOptions.local_forwards) {
       string tunnelEntry =

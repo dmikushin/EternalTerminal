@@ -132,6 +132,42 @@ TEST_CASE("Rejects malformed port forward input", "[TunnelUtils]") {
   }
 }
 
+TEST_CASE("Joins tunnel args from multiple -t/-r occurrences",
+          "[TunnelUtils]") {
+  SECTION("Empty input yields empty string") {
+    REQUIRE(joinTunnelArgs({}) == "");
+  }
+
+  SECTION("Single value passes through unchanged") {
+    REQUIRE(joinTunnelArgs({"1000:2000"}) == "1000:2000");
+  }
+
+  SECTION("Multiple values are joined by commas") {
+    REQUIRE(joinTunnelArgs({"1000:2000", "3000:4000"}) ==
+            "1000:2000,3000:4000");
+  }
+
+  SECTION("Values that already contain commas are preserved") {
+    REQUIRE(joinTunnelArgs({"1000:2000,3000:4000", "5000:6000"}) ==
+            "1000:2000,3000:4000,5000:6000");
+  }
+
+  SECTION("Empty entries are skipped without producing repeated commas") {
+    REQUIRE(joinTunnelArgs({"", "1000:2000", "", "3000:4000", ""}) ==
+            "1000:2000,3000:4000");
+  }
+
+  SECTION("Joined output round-trips through parseRangesToRequests") {
+    auto joined = joinTunnelArgs({"1000:2000", "3000:4000"});
+    auto requests = parseRangesToRequests(joined);
+    REQUIRE(requests.size() == 2);
+    REQUIRE(requests[0].source().port() == 1000);
+    REQUIRE(requests[0].destination().port() == 2000);
+    REQUIRE(requests[1].source().port() == 3000);
+    REQUIRE(requests[1].destination().port() == 4000);
+  }
+}
+
 TEST_CASE("Generates random alphanumeric strings", "[genRandomAlphaNum]") {
   constexpr int desiredLength = 16;
   const string allowedChars =
