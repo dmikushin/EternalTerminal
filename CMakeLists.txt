@@ -217,11 +217,23 @@ option(INSTALL_ZSH_COMPLETION "Install zsh completion script" ON)
 
 add_definitions(-DET_VERSION="${PROJECT_VERSION}")
 
-# For easylogging, disable default log file, enable crash log, ensure thread
-# safe, and catch c++ exceptions
+# Stack tracing (UniversalStacktrace + easylogging++ crash log) requires
+# execinfo/backtrace, which is provided by glibc but not by musl libc.
+# Allow disabling so ET can build on Alpine / musl-based toolchains.
+option(WITH_STACKTRACE
+  "Enable UniversalStacktrace and easylogging++ crash log support (needs glibc backtrace)"
+  ON)
+
+# For easylogging, disable default log file, ensure thread safe, and catch
+# c++ exceptions. Crash log is gated on WITH_STACKTRACE.
 set(CMAKE_CXX_FLAGS
-  "${CMAKE_CXX_FLAGS} -DELPP_NO_DEFAULT_LOG_FILE -DELPP_FEATURE_CRASH_LOG -DELPP_THREAD_SAFE -DELPP_STRICT_PERMISSIONS -DSENTRY_BUILD_STATIC"
+  "${CMAKE_CXX_FLAGS} -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -DELPP_STRICT_PERMISSIONS -DSENTRY_BUILD_STATIC"
 )
+if(WITH_STACKTRACE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DELPP_FEATURE_CRASH_LOG")
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DET_NO_STACKTRACE")
+endif()
 
 IF(WIN32)
   SET(CMAKE_CXX_FLAGS "-DSODIUM_STATIC")
@@ -380,7 +392,7 @@ include_directories(
   ${SIMPLEINI_INCLUDE_DIRS}
 )
 
-if(NOT ANDROID)
+if(NOT ANDROID AND WITH_STACKTRACE)
   include_directories(${EXTERNAL_DIR}/UniversalStacktrace/ust)
 endif()
 

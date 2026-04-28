@@ -134,7 +134,7 @@ namespace fs = boost::filesystem
 #include "sago/platform_folders.h"
 #include "sole.hpp"
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(ET_NO_STACKTRACE)
 #include "ust.hpp"
 #endif
 
@@ -182,10 +182,10 @@ const int MAX_CLIENT_KEEP_ALIVE_DURATION = 5;
 // allow enough time.
 const int SERVER_KEEP_ALIVE_DURATION = 11;
 
-#if defined(__ANDROID__)
-#define STFATAL LOG(FATAL) << "No Stack Trace on Android" << endl
+#if defined(__ANDROID__) || defined(ET_NO_STACKTRACE)
+#define STFATAL LOG(FATAL) << "No Stack Trace available" << endl
 
-#define STERROR LOG(ERROR) << "No Stack Trace on Android" << endl
+#define STERROR LOG(ERROR) << "No Stack Trace available" << endl
 #else
 #define STFATAL LOG(FATAL) << "Stack Trace: " << endl << ust::generate()
 
