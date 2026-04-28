@@ -230,16 +230,15 @@ void TerminalServer::runTerminal(
       pfsresponse = portForwardHandler->createSource(
           pfsr, nullptr, userInfo.uid(), userInfo.gid());
     }
-    if (pfsresponse.has_error()) {
-      InitialResponse response;
-      response.set_error(pfsresponse.error());
-      serverClientState->writePacket(Packet(
-          uint8_t(EtPacketType::INITIAL_RESPONSE), protoToString(response)));
-      return;
-    }
-    // Forward each per-tunnel response to the client so it can announce
-    // OS-assigned ports for port=0 reverse-forward requests.
+    // Append the per-tunnel response unconditionally so the client can
+    // see successes (with actual_port for port=0 requests) and failures
+    // (with the error string) and decide what to do — typically just
+    // log unless the user passed --exit-on-forward-failure.
     *(response.add_reversetunnel_responses()) = pfsresponse;
+    if (pfsresponse.has_error()) {
+      LOG(WARNING) << "Reverse forward failed: " << pfsresponse.error();
+      continue;
+    }
     if (pfsr.has_environmentvariable()) {
       environmentVariables[pfsr.environmentvariable()] = sourceName;
       pipePaths.push_back(sourceName);

@@ -5,14 +5,17 @@
 
 namespace et {
 
-TerminalClient::TerminalClient(
-    shared_ptr<SocketHandler> _socketHandler,
-    shared_ptr<SocketHandler> _pipeSocketHandler,
-    const SocketEndpoint& _socketEndpoint, const string& id,
-    const string& passkey, shared_ptr<Console> _console, bool jumphost,
-    const string& tunnels, const string& reverseTunnels, bool gatewayPorts,
-    bool forwardSshAgent, const string& identityAgent, int _keepaliveDuration,
-    const vector<pair<string, string>>& envVars)
+TerminalClient::TerminalClient(shared_ptr<SocketHandler> _socketHandler,
+                               shared_ptr<SocketHandler> _pipeSocketHandler,
+                               const SocketEndpoint& _socketEndpoint,
+                               const string& id, const string& passkey,
+                               shared_ptr<Console> _console, bool jumphost,
+                               const string& tunnels,
+                               const string& reverseTunnels, bool gatewayPorts,
+                               bool exitOnForwardFailure, bool forwardSshAgent,
+                               const string& identityAgent,
+                               int _keepaliveDuration,
+                               const vector<pair<string, string>>& envVars)
     : console(_console),
       shuttingDown(false),
       keepaliveDuration(_keepaliveDuration) {
@@ -50,6 +53,12 @@ TerminalClient::TerminalClient(
         auto pfsresponse =
             portForwardHandler->createSource(pfsr, nullptr, myUid, myGid);
         if (pfsresponse.has_error()) {
+          if (exitOnForwardFailure) {
+            CLOG(INFO, "stderr")
+                << "Could not request local forward: " << pfsresponse.error()
+                << endl;
+            exit(1);
+          }
           LOG(WARNING) << "Failed to establish port forward "
                        << pfsr.source().port() << ":"
                        << pfsr.destination().port() << " - "
@@ -158,18 +167,29 @@ TerminalClient::TerminalClient(
               // forwards that requested port=0, mirroring OpenSSH.
               const int responseCount =
                   initialResponse.reversetunnel_responses_size();
+              bool reverseFailureSeen = false;
               for (size_t i = 0; i < reverseRequestSummaries.size() &&
                                  static_cast<int>(i) < responseCount;
                    ++i) {
                 const auto& summary = reverseRequestSummaries[i];
                 const auto& resp = initialResponse.reversetunnel_responses(i);
-                if (summary.dynamicPort && resp.has_actual_port() &&
-                    !resp.has_error()) {
+                if (resp.has_error()) {
+                  reverseFailureSeen = true;
+                  CLOG(INFO, "stderr") << "Could not request remote forward to "
+                                       << summary.destinationName << ":"
+                                       << summary.destinationPort << ": "
+                                       << resp.error() << endl;
+                  continue;
+                }
+                if (summary.dynamicPort && resp.has_actual_port()) {
                   CLOG(INFO, "stderr")
                       << "Allocated port " << resp.actual_port()
                       << " for remote forward to " << summary.destinationName
                       << ":" << summary.destinationPort << endl;
                 }
+              }
+              if (reverseFailureSeen && exitOnForwardFailure) {
+                exit(1);
               }
               fail = false;
               break;

@@ -159,7 +159,7 @@ void serverReadWriteTest(
 
   shared_ptr<TerminalClient> terminalClient(new TerminalClient(
       clientSocketHandler, clientPipeSocketHandler, serverEndpoint, id, passkey,
-      fakeConsole, false, "", "", false, false, "",
+      fakeConsole, false, "", "", false, false, false, "",
       MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });
@@ -376,7 +376,7 @@ TEST_CASE_METHOD(ServerEndToEndTestFixture, "ServerMultipleClientsTest",
 
     auto client = make_shared<TerminalClient>(
         clientSocketHandlers[i], clientPipeSocketHandlers[i], serverEndpoint,
-        id, passkey, fakeConsoles[i], false, "", "", false, false, "",
+        id, passkey, fakeConsoles[i], false, "", "", false, false, false, "",
         MAX_CLIENT_KEEP_ALIVE_DURATION, vector<pair<string, string>>());
     terminalClients.push_back(client);
     terminalClientThreads.push_back(
@@ -452,7 +452,7 @@ TEST_CASE_METHOD(ServerEndToEndTestFixture, "ServerDataTransferTest",
 
   shared_ptr<TerminalClient> terminalClient(new TerminalClient(
       clientSocketHandler, clientPipeSocketHandler, serverEndpoint, id, passkey,
-      fakeConsole, false, "", "", false, false, "",
+      fakeConsole, false, "", "", false, false, false, "",
       MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });
@@ -494,7 +494,7 @@ TEST_CASE_METHOD(ServerEndToEndTestFixture, "ServerJumphostTest",
 
   shared_ptr<TerminalClient> terminalClient(new TerminalClient(
       clientSocketHandler, clientPipeSocketHandler, jumphostServerEndpoint, id,
-      passkey, fakeConsole, true, "", "", false, false, "",
+      passkey, fakeConsole, true, "", "", false, false, false, "",
       MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });

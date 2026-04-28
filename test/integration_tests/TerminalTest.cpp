@@ -37,7 +37,7 @@ void readWriteTest(shared_ptr<PipeSocketHandler> routerSocketHandler,
 
   shared_ptr<TerminalClient> terminalClient(new TerminalClient(
       clientSocketHandler, clientPipeSocketHandler, serverEndpoint, id, passkey,
-      fakeConsole, false, "", "", false, false, "",
+      fakeConsole, false, "", "", false, false, false, "",
       MAX_CLIENT_KEEP_ALIVE_DURATION, envVars));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });
@@ -337,7 +337,7 @@ void simultaneousTerminalConnectionTest(
 
   shared_ptr<TerminalClient> terminalClient(new TerminalClient(
       clientSocketHandler, clientPipeSocketHandler, serverEndpoint, id, passkey,
-      fakeConsole, false, "", "", false, false, "",
+      fakeConsole, false, "", "", false, false, false, "",
       MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });
