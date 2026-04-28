@@ -10,8 +10,8 @@ TerminalClient::TerminalClient(
     shared_ptr<SocketHandler> _pipeSocketHandler,
     const SocketEndpoint& _socketEndpoint, const string& id,
     const string& passkey, shared_ptr<Console> _console, bool jumphost,
-    const string& tunnels, const string& reverseTunnels, bool forwardSshAgent,
-    const string& identityAgent, int _keepaliveDuration,
+    const string& tunnels, const string& reverseTunnels, bool gatewayPorts,
+    bool forwardSshAgent, const string& identityAgent, int _keepaliveDuration,
     const vector<pair<string, string>>& envVars)
     : console(_console),
       shuttingDown(false),
@@ -27,7 +27,8 @@ TerminalClient::TerminalClient(
 
   try {
     if (tunnels.length()) {
-      auto pfsrs = parseRangesToRequests(tunnels);
+      // Forward (-t/-L) tunnels: gateway-ports applies, mirroring ssh -g.
+      auto pfsrs = parseRangesToRequests(tunnels, gatewayPorts);
       for (auto& pfsr : pfsrs) {
         auto pfsresponse =
             portForwardHandler->createSource(pfsr, nullptr, -1, -1);
@@ -41,6 +42,10 @@ TerminalClient::TerminalClient(
       }
     }
     if (reverseTunnels.length()) {
+      // Reverse (-r/-R) tunnels bind on the server. OpenSSH controls this via
+      // sshd's GatewayPorts setting, not the client's -g flag, so we never
+      // apply gateway-ports here. Users wanting wildcard for -r should use
+      // explicit ssh-style "*:port:host:hp" or "0.0.0.0:port:host:hp".
       auto pfsrs = parseRangesToRequests(reverseTunnels);
       for (auto& pfsr : pfsrs) {
         *(payload.add_reversetunnels()) = pfsr;

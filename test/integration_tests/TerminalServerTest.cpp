@@ -157,10 +157,10 @@ void serverReadWriteTest(
 
   sleep(1);
 
-  shared_ptr<TerminalClient> terminalClient(
-      new TerminalClient(clientSocketHandler, clientPipeSocketHandler,
-                         serverEndpoint, id, passkey, fakeConsole, false, "",
-                         "", false, "", MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
+  shared_ptr<TerminalClient> terminalClient(new TerminalClient(
+      clientSocketHandler, clientPipeSocketHandler, serverEndpoint, id, passkey,
+      fakeConsole, false, "", "", false, false, "",
+      MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });
   sleep(3);
@@ -376,7 +376,7 @@ TEST_CASE_METHOD(ServerEndToEndTestFixture, "ServerMultipleClientsTest",
 
     auto client = make_shared<TerminalClient>(
         clientSocketHandlers[i], clientPipeSocketHandlers[i], serverEndpoint,
-        id, passkey, fakeConsoles[i], false, "", "", false, "",
+        id, passkey, fakeConsoles[i], false, "", "", false, false, "",
         MAX_CLIENT_KEEP_ALIVE_DURATION, vector<pair<string, string>>());
     terminalClients.push_back(client);
     terminalClientThreads.push_back(
@@ -450,10 +450,10 @@ TEST_CASE_METHOD(ServerEndToEndTestFixture, "ServerDataTransferTest",
 
   sleep(1);
 
-  shared_ptr<TerminalClient> terminalClient(
-      new TerminalClient(clientSocketHandler, clientPipeSocketHandler,
-                         serverEndpoint, id, passkey, fakeConsole, false, "",
-                         "", false, "", MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
+  shared_ptr<TerminalClient> terminalClient(new TerminalClient(
+      clientSocketHandler, clientPipeSocketHandler, serverEndpoint, id, passkey,
+      fakeConsole, false, "", "", false, false, "",
+      MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });
   sleep(3);
@@ -494,7 +494,7 @@ TEST_CASE_METHOD(ServerEndToEndTestFixture, "ServerJumphostTest",
 
   shared_ptr<TerminalClient> terminalClient(new TerminalClient(
       clientSocketHandler, clientPipeSocketHandler, jumphostServerEndpoint, id,
-      passkey, fakeConsole, true, "", "", false, "",
+      passkey, fakeConsole, true, "", "", false, false, "",
       MAX_CLIENT_KEEP_ALIVE_DURATION, {}));
   thread terminalClientThread(
       [terminalClient]() { terminalClient->run("", false); });

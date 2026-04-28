@@ -30,8 +30,9 @@ class TerminalClient {
                  const SocketEndpoint& _socketEndpoint, const string& id,
                  const string& passkey, shared_ptr<Console> _console,
                  bool jumphost, const string& tunnels,
-                 const string& reverseTunnels, bool forwardSshAgent,
-                 const string& identityAgent, int _keepaliveDuration,
+                 const string& reverseTunnels, bool gatewayPorts,
+                 bool forwardSshAgent, const string& identityAgent,
+                 int _keepaliveDuration,
                  const vector<pair<string, string>>& envVars);
   /** @brief Tears down the client, closing sockets and stopping background
    * threads. */

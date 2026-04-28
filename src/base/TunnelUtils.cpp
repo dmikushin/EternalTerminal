@@ -45,11 +45,13 @@ void emitEnvVarPipe(vector<PortForwardSourceRequest>& pfsrs,
 }
 
 void emitEtStylePair(vector<PortForwardSourceRequest>& pfsrs,
-                     const vector<string>& parts, const string& fullInput) {
+                     const vector<string>& parts, const string& fullInput,
+                     bool gatewayPorts) {
   const string& src = parts[0];
   const string& dst = parts[1];
   const bool srcRange = src.find('-') != string::npos;
   const bool dstRange = dst.find('-') != string::npos;
+  const string defaultBind = gatewayPorts ? "0.0.0.0" : "127.0.0.1";
   try {
     if (srcRange && dstRange) {
       auto srcRangeParts = split(src, '-');
@@ -65,7 +67,7 @@ void emitEtStylePair(vector<PortForwardSourceRequest>& pfsrs,
       const int len = srcEnd - srcStart + 1;
       for (int i = 0; i < len; ++i) {
         PortForwardSourceRequest pfsr;
-        pfsr.mutable_source()->set_name("127.0.0.1");
+        pfsr.mutable_source()->set_name(defaultBind);
         pfsr.mutable_source()->set_port(srcStart + i);
         pfsr.mutable_destination()->set_port(dstStart + i);
         pfsrs.push_back(pfsr);
@@ -76,7 +78,7 @@ void emitEtStylePair(vector<PortForwardSourceRequest>& pfsrs,
           "destination must be a range (and vice versa)");
     } else {
       PortForwardSourceRequest pfsr;
-      pfsr.mutable_source()->set_name("127.0.0.1");
+      pfsr.mutable_source()->set_name(defaultBind);
       pfsr.mutable_source()->set_port(stoi(src));
       pfsr.mutable_destination()->set_port(stoi(dst));
       pfsrs.push_back(pfsr);
@@ -90,12 +92,13 @@ void emitEtStylePair(vector<PortForwardSourceRequest>& pfsrs,
 }
 
 void emitSsh3Field(vector<PortForwardSourceRequest>& pfsrs,
-                   const vector<string>& parts, const string& fullInput) {
+                   const vector<string>& parts, const string& fullInput,
+                   bool gatewayPorts) {
   // ssh-style: port:host:hostport. Default bind is 127.0.0.1, matching
-  // OpenSSH without GatewayPorts.
+  // OpenSSH without GatewayPorts; with `-g` it switches to 0.0.0.0.
   try {
     PortForwardSourceRequest pfsr;
-    pfsr.mutable_source()->set_name("127.0.0.1");
+    pfsr.mutable_source()->set_name(gatewayPorts ? "0.0.0.0" : "127.0.0.1");
     pfsr.mutable_source()->set_port(stoi(parts[0]));
     pfsr.mutable_destination()->set_name(parts[1]);
     pfsr.mutable_destination()->set_port(stoi(parts[2]));
@@ -109,9 +112,16 @@ void emitSsh3Field(vector<PortForwardSourceRequest>& pfsrs,
 void emitSsh4Field(vector<PortForwardSourceRequest>& pfsrs,
                    const vector<string>& parts, const string& fullInput) {
   // ssh-style: bind_address:port:host:hostport.
+  // Per ssh(1): an empty bind_address or "*" indicates that the port
+  // should be available from all interfaces.
   try {
     PortForwardSourceRequest pfsr;
-    pfsr.mutable_source()->set_name(parts[0]);
+    const string& bind = parts[0];
+    if (bind.empty() || bind == "*") {
+      pfsr.mutable_source()->set_name("0.0.0.0");
+    } else {
+      pfsr.mutable_source()->set_name(bind);
+    }
     pfsr.mutable_source()->set_port(stoi(parts[1]));
     pfsr.mutable_destination()->set_name(parts[2]);
     pfsr.mutable_destination()->set_port(stoi(parts[3]));
@@ -124,9 +134,11 @@ void emitSsh4Field(vector<PortForwardSourceRequest>& pfsrs,
 
 // Parse a single tunnel-arg segment (no commas inside) and append the
 // resulting requests to `pfsrs`. Dispatches by the number of colon-separated
-// parts (respecting bracketed IPv6 groups).
+// parts (respecting bracketed IPv6 groups). When `gatewayPorts` is true,
+// segments without an explicit bind address default to 0.0.0.0 instead of
+// 127.0.0.1.
 void parseOneTunnelArg(vector<PortForwardSourceRequest>& pfsrs,
-                       const string& segment) {
+                       const string& segment, bool gatewayPorts) {
   auto parts = splitTunnelByColon(segment);
   switch (parts.size()) {
     case 0:
@@ -139,12 +151,12 @@ void parseOneTunnelArg(vector<PortForwardSourceRequest>& pfsrs,
       if (!srcNumish && !dstNumish) {
         emitEnvVarPipe(pfsrs, parts);
       } else {
-        emitEtStylePair(pfsrs, parts, segment);
+        emitEtStylePair(pfsrs, parts, segment, gatewayPorts);
       }
       break;
     }
     case 3:
-      emitSsh3Field(pfsrs, parts, segment);
+      emitSsh3Field(pfsrs, parts, segment, gatewayPorts);
       break;
     case 4:
       emitSsh4Field(pfsrs, parts, segment);
@@ -175,10 +187,11 @@ vector<string> parseSshTunnelArg(const string& input) {
   return parts;
 }
 
-vector<PortForwardSourceRequest> parseRangesToRequests(const string& input) {
+vector<PortForwardSourceRequest> parseRangesToRequests(const string& input,
+                                                       bool gatewayPorts) {
   vector<PortForwardSourceRequest> pfsrs;
   for (auto& segment : split(input, ',')) {
-    parseOneTunnelArg(pfsrs, segment);
+    parseOneTunnelArg(pfsrs, segment, gatewayPorts);
   }
   return pfsrs;
 }

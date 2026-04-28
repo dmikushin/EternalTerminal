@@ -118,6 +118,11 @@ int main(int argc, char** argv) {
          cxxopts::value<std::vector<std::string>>())  //
         ("r,reversetunnel", "Reverse Tunnel: See doc for -t/--tunnel.",
          cxxopts::value<std::vector<std::string>>())  //
+        ("g,gateway-ports",
+         "Allow remote hosts to connect to local forwarded ports. Equivalent "
+         "to ssh -g: forwards specified with -t/--tunnel that omit a bind "
+         "address default to 0.0.0.0 instead of 127.0.0.1. Has no effect on "
+         "reverse tunnels (use explicit *:port:host:hp for those).")  //
         ("jumphost", "jumphost between localhost and destination",
          cxxopts::value<std::string>())  //
         ("jport", "Jumphost machine port",
@@ -393,7 +398,8 @@ int main(int argc, char** argv) {
     TerminalClient terminalClient(
         clientSocket, clientPipeSocket, socketEndpoint, idpasskeypair.first,
         idpasskeypair.second, console, is_jumphost, tunnel_arg, r_tunnel_arg,
-        forwardAgent, sshSocket, keepaliveDuration, sshConfigOptions.env_vars);
+        result.count("gateway-ports") > 0, forwardAgent, sshSocket,
+        keepaliveDuration, sshConfigOptions.env_vars);
     terminalClient.run(
         result.count("command") ? result["command"].as<string>() : "",
         result.count("noexit"));

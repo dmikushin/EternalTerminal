@@ -208,6 +208,65 @@ TEST_CASE("Joins tunnel args from multiple -t/-r occurrences",
   }
 }
 
+TEST_CASE("Recognizes wildcard bind in 4-field ssh-style", "[TunnelUtils]") {
+  SECTION("Asterisk bind expands to 0.0.0.0") {
+    auto requests = parseRangesToRequests("*:8080:host:80");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "0.0.0.0");
+    REQUIRE(requests[0].source().port() == 8080);
+  }
+
+  SECTION("Empty bind expands to 0.0.0.0") {
+    auto requests = parseRangesToRequests(":8080:host:80");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "0.0.0.0");
+    REQUIRE(requests[0].source().port() == 8080);
+  }
+
+  SECTION("Explicit 127.0.0.1 bind is preserved as-is") {
+    auto requests = parseRangesToRequests("127.0.0.1:8080:host:80");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "127.0.0.1");
+  }
+}
+
+TEST_CASE("gatewayPorts flag rewrites default loopback bind", "[TunnelUtils]") {
+  SECTION("Et-style pair switches default to 0.0.0.0 with gateway-ports") {
+    auto requests = parseRangesToRequests("8080:80", /*gatewayPorts=*/true);
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "0.0.0.0");
+    REQUIRE(requests[0].source().port() == 8080);
+  }
+
+  SECTION("Et-style range switches default to 0.0.0.0 with gateway-ports") {
+    auto requests =
+        parseRangesToRequests("8000-8001:9000-9001", /*gatewayPorts=*/true);
+    REQUIRE(requests.size() == 2);
+    for (auto& r : requests) {
+      REQUIRE(r.source().name() == "0.0.0.0");
+    }
+  }
+
+  SECTION("3-field ssh-style switches default to 0.0.0.0 with gateway-ports") {
+    auto requests =
+        parseRangesToRequests("8080:host:80", /*gatewayPorts=*/true);
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "0.0.0.0");
+  }
+
+  SECTION("4-field ssh-style with explicit bind ignores gateway-ports flag") {
+    auto requests = parseRangesToRequests("127.0.0.1:8080:host:80",
+                                          /*gatewayPorts=*/true);
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "127.0.0.1");
+  }
+
+  SECTION("Without gateway-ports the default stays 127.0.0.1") {
+    auto requests = parseRangesToRequests("8080:80");
+    REQUIRE(requests[0].source().name() == "127.0.0.1");
+  }
+}
+
 TEST_CASE("Generates random alphanumeric strings", "[genRandomAlphaNum]") {
   constexpr int desiredLength = 16;
   const string allowedChars =

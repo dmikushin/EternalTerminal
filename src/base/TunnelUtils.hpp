@@ -7,9 +7,15 @@ namespace et {
 
 /**
  * @brief Parses a comma-separated list of tunnel arguments into proto messages.
+ *
+ * When `gatewayPorts` is true, segments that do not specify an explicit bind
+ * address default to "0.0.0.0" instead of "127.0.0.1". This mirrors the
+ * effect of OpenSSH's `-g` option for local forwards.
+ *
  * @throws TunnelParseException when the syntax is invalid.
  */
-vector<PortForwardSourceRequest> parseRangesToRequests(const string& input);
+vector<PortForwardSourceRequest> parseRangesToRequests(
+    const string& input, bool gatewayPorts = false);
 
 vector<string> parseSshTunnelArg(const string& input);
 
