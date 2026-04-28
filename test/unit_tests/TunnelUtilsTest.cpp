@@ -267,6 +267,85 @@ TEST_CASE("gatewayPorts flag rewrites default loopback bind", "[TunnelUtils]") {
   }
 }
 
+TEST_CASE("Parses ssh-style UNIX-domain socket forwards", "[TunnelUtils]") {
+  SECTION("local_socket:remote_socket - both UNIX") {
+    auto requests = parseRangesToRequests("/tmp/local.sock:/tmp/remote.sock");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].has_source());
+    REQUIRE(requests[0].source().name() == "/tmp/local.sock");
+    REQUIRE_FALSE(requests[0].source().has_port());
+    REQUIRE(requests[0].has_destination());
+    REQUIRE(requests[0].destination().name() == "/tmp/remote.sock");
+    REQUIRE_FALSE(requests[0].destination().has_port());
+  }
+
+  SECTION("port:remote_socket - TCP listen, UNIX destination") {
+    auto requests = parseRangesToRequests("8080:/tmp/remote.sock");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "127.0.0.1");
+    REQUIRE(requests[0].source().port() == 8080);
+    REQUIRE(requests[0].destination().name() == "/tmp/remote.sock");
+    REQUIRE_FALSE(requests[0].destination().has_port());
+  }
+
+  SECTION("bind:port:remote_socket - explicit bind, UNIX destination") {
+    auto requests = parseRangesToRequests("0.0.0.0:8080:/tmp/remote.sock");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "0.0.0.0");
+    REQUIRE(requests[0].source().port() == 8080);
+    REQUIRE(requests[0].destination().name() == "/tmp/remote.sock");
+    REQUIRE_FALSE(requests[0].destination().has_port());
+  }
+
+  SECTION("local_socket:host:hostport - UNIX listen, TCP destination") {
+    auto requests = parseRangesToRequests("/tmp/local.sock:host.example:80");
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "/tmp/local.sock");
+    REQUIRE_FALSE(requests[0].source().has_port());
+    REQUIRE(requests[0].destination().name() == "host.example");
+    REQUIRE(requests[0].destination().port() == 80);
+  }
+
+  SECTION("Mixing UNIX and TCP forwards in a comma list") {
+    auto requests =
+        parseRangesToRequests("8080:80,/tmp/a.sock:/tmp/b.sock,9090:host:443");
+    REQUIRE(requests.size() == 3);
+    // 8080:80 -> et-style TCP pair
+    REQUIRE(requests[0].source().name() == "127.0.0.1");
+    REQUIRE(requests[0].source().port() == 8080);
+    REQUIRE(requests[0].destination().port() == 80);
+    REQUIRE_FALSE(requests[0].destination().has_name());
+    // /tmp/a.sock:/tmp/b.sock -> UNIX -> UNIX
+    REQUIRE(requests[1].source().name() == "/tmp/a.sock");
+    REQUIRE_FALSE(requests[1].source().has_port());
+    REQUIRE(requests[1].destination().name() == "/tmp/b.sock");
+    REQUIRE_FALSE(requests[1].destination().has_port());
+    // 9090:host:443 -> 3-field TCP -> TCP
+    REQUIRE(requests[2].source().name() == "127.0.0.1");
+    REQUIRE(requests[2].source().port() == 9090);
+    REQUIRE(requests[2].destination().name() == "host");
+    REQUIRE(requests[2].destination().port() == 443);
+  }
+
+  SECTION("gateway-ports propagates to TCP-to-UNIX forwards") {
+    auto requests =
+        parseRangesToRequests("8080:/tmp/remote.sock", /*gatewayPorts=*/true);
+    REQUIRE(requests.size() == 1);
+    REQUIRE(requests[0].source().name() == "0.0.0.0");
+    REQUIRE(requests[0].source().port() == 8080);
+  }
+
+  SECTION("env-var pipe still recognized when destination is a path") {
+    // SSH_AUTH_SOCK is not a UNIX path (no leading '/'), so this stays an
+    // environment-variable pipe forward, not a UNIX-to-UNIX bridge.
+    auto requests = parseRangesToRequests("SSH_AUTH_SOCK:/tmp/agent.sock");
+    REQUIRE(requests.size() == 1);
+    REQUIRE_FALSE(requests[0].has_source());
+    REQUIRE(requests[0].environmentvariable() == "SSH_AUTH_SOCK");
+    REQUIRE(requests[0].destination().name() == "/tmp/agent.sock");
+  }
+}
+
 TEST_CASE("Generates random alphanumeric strings", "[genRandomAlphaNum]") {
   constexpr int desiredLength = 16;
   const string allowedChars =

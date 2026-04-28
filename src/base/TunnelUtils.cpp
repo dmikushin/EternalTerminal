@@ -31,6 +31,11 @@ vector<string> splitTunnelByColon(const string& input) {
 // `start-end` range). Used to disambiguate the 2-part case between an
 // et-style port pair and an environment-variable pipe like
 // `SSH_AUTH_SOCK:/tmp/agent.sock`.
+// True when `s` looks like an absolute filesystem path (UNIX-domain socket).
+// We deliberately accept only paths that start with `/` to avoid false
+// positives on hostnames or other tokens.
+bool isUnixPath(const string& s) { return !s.empty() && s.front() == '/'; }
+
 bool looksNumericOrRange(const string& s) {
   return !s.empty() && s.find_first_not_of("0123456789-") == string::npos;
 }
@@ -132,6 +137,75 @@ void emitSsh4Field(vector<PortForwardSourceRequest>& pfsrs,
   }
 }
 
+// ssh -L local_socket:remote_socket — UNIX-domain socket on both ends.
+// Both `name` fields hold paths and neither side has `port` set, so the
+// runtime PortForwardHandler routes both sides through pipeSocketHandler.
+void emitUnixToUnix(vector<PortForwardSourceRequest>& pfsrs,
+                    const vector<string>& parts) {
+  PortForwardSourceRequest pfsr;
+  pfsr.mutable_source()->set_name(parts[0]);
+  pfsr.mutable_destination()->set_name(parts[1]);
+  pfsrs.push_back(pfsr);
+}
+
+// ssh -L port:remote_socket — local TCP listener forwarding to a remote
+// UNIX socket. Bind defaults to 127.0.0.1 (or 0.0.0.0 with -g), matching
+// OpenSSH; the destination has no `port` so PortForwardHandler treats it
+// as a UNIX socket on the server side.
+void emitTcpToUnix(vector<PortForwardSourceRequest>& pfsrs,
+                   const vector<string>& parts, const string& fullInput,
+                   bool gatewayPorts) {
+  try {
+    PortForwardSourceRequest pfsr;
+    pfsr.mutable_source()->set_name(gatewayPorts ? "0.0.0.0" : "127.0.0.1");
+    pfsr.mutable_source()->set_port(stoi(parts[0]));
+    pfsr.mutable_destination()->set_name(parts[1]);
+    pfsrs.push_back(pfsr);
+  } catch (const std::logic_error& lr) {
+    throw TunnelParseException("Invalid tunnel argument '" + fullInput +
+                               "': " + lr.what());
+  }
+}
+
+// ssh -L bind_address:port:remote_socket — TCP listener with explicit bind
+// forwarding to a remote UNIX socket.
+void emitSshTcpToUnixWithBind(vector<PortForwardSourceRequest>& pfsrs,
+                              const vector<string>& parts,
+                              const string& fullInput) {
+  try {
+    PortForwardSourceRequest pfsr;
+    const string& bind = parts[0];
+    if (bind.empty() || bind == "*") {
+      pfsr.mutable_source()->set_name("0.0.0.0");
+    } else {
+      pfsr.mutable_source()->set_name(bind);
+    }
+    pfsr.mutable_source()->set_port(stoi(parts[1]));
+    pfsr.mutable_destination()->set_name(parts[2]);
+    pfsrs.push_back(pfsr);
+  } catch (const std::logic_error& lr) {
+    throw TunnelParseException("Invalid tunnel argument '" + fullInput +
+                               "': " + lr.what());
+  }
+}
+
+// ssh -L local_socket:host:hostport — UNIX listener forwarding to a remote
+// TCP host. Source has only `name` (path), destination has both name and
+// port.
+void emitSshUnixToTcp(vector<PortForwardSourceRequest>& pfsrs,
+                      const vector<string>& parts, const string& fullInput) {
+  try {
+    PortForwardSourceRequest pfsr;
+    pfsr.mutable_source()->set_name(parts[0]);
+    pfsr.mutable_destination()->set_name(parts[1]);
+    pfsr.mutable_destination()->set_port(stoi(parts[2]));
+    pfsrs.push_back(pfsr);
+  } catch (const std::logic_error& lr) {
+    throw TunnelParseException("Invalid tunnel argument '" + fullInput +
+                               "': " + lr.what());
+  }
+}
+
 // Parse a single tunnel-arg segment (no commas inside) and append the
 // resulting requests to `pfsrs`. Dispatches by the number of colon-separated
 // parts (respecting bracketed IPv6 groups). When `gatewayPorts` is true,
@@ -146,18 +220,41 @@ void parseOneTunnelArg(vector<PortForwardSourceRequest>& pfsrs,
       throw TunnelParseException(
           "Tunnel argument must have source and destination between a ':'");
     case 2: {
+      const bool srcPath = isUnixPath(parts[0]);
+      const bool dstPath = isUnixPath(parts[1]);
       const bool srcNumish = looksNumericOrRange(parts[0]);
-      const bool dstNumish = looksNumericOrRange(parts[1]);
-      if (!srcNumish && !dstNumish) {
+      if (srcPath && dstPath) {
+        // local_socket:remote_socket
+        emitUnixToUnix(pfsrs, parts);
+      } else if (srcNumish && dstPath) {
+        // port:remote_socket
+        emitTcpToUnix(pfsrs, parts, segment, gatewayPorts);
+      } else if (!srcNumish && !srcPath && dstPath) {
+        // ENV_VAR:/socket — environment-variable pipe forwarding.
         emitEnvVarPipe(pfsrs, parts);
       } else {
+        // Both numeric (port:port pair or range:range), or anything else
+        // that looks numeric — let emitEtStylePair surface a clear error
+        // for malformed inputs.
         emitEtStylePair(pfsrs, parts, segment, gatewayPorts);
       }
       break;
     }
-    case 3:
-      emitSsh3Field(pfsrs, parts, segment, gatewayPorts);
+    case 3: {
+      const bool firstPath = isUnixPath(parts[0]);
+      const bool lastPath = isUnixPath(parts[2]);
+      if (lastPath) {
+        // bind_address:port:remote_socket
+        emitSshTcpToUnixWithBind(pfsrs, parts, segment);
+      } else if (firstPath) {
+        // local_socket:host:hostport
+        emitSshUnixToTcp(pfsrs, parts, segment);
+      } else {
+        // port:host:hostport
+        emitSsh3Field(pfsrs, parts, segment, gatewayPorts);
+      }
       break;
+    }
     case 4:
       emitSsh4Field(pfsrs, parts, segment);
       break;

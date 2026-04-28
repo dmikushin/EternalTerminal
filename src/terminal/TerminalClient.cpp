@@ -29,9 +29,16 @@ TerminalClient::TerminalClient(
     if (tunnels.length()) {
       // Forward (-t/-L) tunnels: gateway-ports applies, mirroring ssh -g.
       auto pfsrs = parseRangesToRequests(tunnels, gatewayPorts);
+#ifdef WIN32
+      const uid_t myUid = static_cast<uid_t>(-1);
+      const gid_t myGid = static_cast<gid_t>(-1);
+#else
+      const uid_t myUid = ::getuid();
+      const gid_t myGid = ::getgid();
+#endif
       for (auto& pfsr : pfsrs) {
         auto pfsresponse =
-            portForwardHandler->createSource(pfsr, nullptr, -1, -1);
+            portForwardHandler->createSource(pfsr, nullptr, myUid, myGid);
         if (pfsresponse.has_error()) {
           LOG(WARNING) << "Failed to establish port forward "
                        << pfsr.source().port() << ":"
