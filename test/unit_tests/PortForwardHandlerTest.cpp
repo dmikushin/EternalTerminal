@@ -221,7 +221,7 @@ TEST_CASE("PortForwardHandler createSource error when source and sourceName",
   CHECK(response.has_error());
 }
 
-TEST_CASE("PortForwardHandler createDestination with port (IPv6)",
+TEST_CASE("PortForwardHandler createDestination defaults to localhost",
           "[PortForwardHandler]") {
   auto networkHandler = make_shared<FakePortForwardSocketHandler>();
   auto pipeHandler = make_shared<FakePortForwardSocketHandler>();
@@ -241,35 +241,36 @@ TEST_CASE("PortForwardHandler createDestination with port (IPv6)",
   CHECK_FALSE(response.has_error());
   CHECK(response.has_socketid());
   REQUIRE(networkHandler->connectEndpoints.size() == 1);
-  CHECK(networkHandler->connectEndpoints[0].name() == "::1");
+  CHECK(networkHandler->connectEndpoints[0].name() == "localhost");
   CHECK(networkHandler->connectEndpoints[0].port() == 8080);
 }
 
-TEST_CASE("PortForwardHandler createDestination with port fallback to IPv4",
-          "[PortForwardHandler]") {
+TEST_CASE(
+    "PortForwardHandler createDestination honors explicit destination name",
+    "[PortForwardHandler]") {
   auto networkHandler = make_shared<FakePortForwardSocketHandler>();
   auto pipeHandler = make_shared<FakePortForwardSocketHandler>();
   PortForwardHandler handler(networkHandler, pipeHandler);
 
-  // First connect (IPv6) fails, second (IPv4) succeeds
   networkHandler->setConnectResult(42);
 
   PortForwardDestinationRequest request;
   SocketEndpoint destination;
-  destination.set_port(8080);
+  destination.set_name("172.17.0.1");
+  destination.set_port(22);
   *request.mutable_destination() = destination;
-  request.set_fd(100);
+  request.set_fd(101);
 
-  // Simulate IPv6 failure by having first connect return -1, then second
-  // succeeds
-  networkHandler->nextConnectFd = -1;
-  PortForwardDestinationResponse response1 = handler.createDestination(request);
+  PortForwardDestinationResponse response = handler.createDestination(request);
 
-  // This will fail because both attempts fail
-  CHECK(response1.has_error());
-  REQUIRE(networkHandler->connectEndpoints.size() == 2);
-  CHECK(networkHandler->connectEndpoints[0].name() == "::1");
-  CHECK(networkHandler->connectEndpoints[1].name() == "127.0.0.1");
+  CHECK_FALSE(response.has_error());
+  // The name from the request must reach the socket layer verbatim — no
+  // hardcoded localhost fallback. ssh(1) -L/-R semantics resolve "host"
+  // on the destination side, so a request that says 172.17.0.1 must hit
+  // 172.17.0.1, not ::1 or 127.0.0.1.
+  REQUIRE(networkHandler->connectEndpoints.size() == 1);
+  CHECK(networkHandler->connectEndpoints[0].name() == "172.17.0.1");
+  CHECK(networkHandler->connectEndpoints[0].port() == 22);
 }
 
 TEST_CASE("PortForwardHandler createDestination with pipe",

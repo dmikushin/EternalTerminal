@@ -157,19 +157,15 @@ PortForwardDestinationResponse PortForwardHandler::createDestination(
   int fd = -1;
   bool isTcp = pfdr.destination().has_port();
   if (pfdr.destination().has_port()) {
-    // Try ipv6 first
-    SocketEndpoint ipv6Localhost;
-    ipv6Localhost.set_name("::1");
-    ipv6Localhost.set_port(pfdr.destination().port());
-
-    fd = networkSocketHandler->connect(ipv6Localhost);
-    if (fd == -1) {
-      SocketEndpoint ipv4Localhost;
-      ipv4Localhost.set_name("127.0.0.1");
-      ipv4Localhost.set_port(pfdr.destination().port());
-      // Try ipv4 next
-      fd = networkSocketHandler->connect(ipv4Localhost);
-    }
+    // Honor the actual host requested by the peer. ssh -L/-R semantics
+    // resolve "host" on the destination side (the side performing the
+    // upstream connection) rather than always pointing at localhost.
+    const string& destName =
+        pfdr.destination().has_name() ? pfdr.destination().name() : "localhost";
+    SocketEndpoint dest;
+    dest.set_name(destName);
+    dest.set_port(pfdr.destination().port());
+    fd = networkSocketHandler->connect(dest);
   } else {
     fd = pipeSocketHandler->connect(pfdr.destination());
   }
