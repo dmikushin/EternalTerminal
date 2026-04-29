@@ -1,5 +1,6 @@
 #include "TerminalClient.hpp"
 
+#include "EscapeProcessor.hpp"
 #include "TelemetryService.hpp"
 #include "TunnelUtils.hpp"
 
@@ -18,7 +19,8 @@ TerminalClient::TerminalClient(shared_ptr<SocketHandler> _socketHandler,
                                const vector<pair<string, string>>& envVars)
     : console(_console),
       shuttingDown(false),
-      keepaliveDuration(_keepaliveDuration) {
+      keepaliveDuration(_keepaliveDuration),
+      gatewayPorts(gatewayPorts) {
   portForwardHandler = shared_ptr<PortForwardHandler>(
       new PortForwardHandler(_socketHandler, _pipeSocketHandler));
   InitialPayload payload;
@@ -225,6 +227,104 @@ TerminalClient::~TerminalClient() {
   connection.reset();
 }
 
+namespace {
+
+// Strip leading/trailing ASCII whitespace from `s`.
+string trim(const string& s) {
+  size_t start = 0;
+  while (start < s.size() && (s[start] == ' ' || s[start] == '\t' ||
+                              s[start] == '\r' || s[start] == '\n')) {
+    ++start;
+  }
+  size_t end = s.size();
+  while (end > start && (s[end - 1] == ' ' || s[end - 1] == '\t' ||
+                         s[end - 1] == '\r' || s[end - 1] == '\n')) {
+    --end;
+  }
+  return s.substr(start, end - start);
+}
+
+void writeStderrLine(const string& s) {
+#ifdef WIN32
+  (void)s;
+#else
+  string line = s + "\r\n";
+  ssize_t total = 0;
+  while (total < static_cast<ssize_t>(line.size())) {
+    ssize_t n =
+        ::write(STDERR_FILENO, line.data() + total, line.size() - total);
+    if (n <= 0) break;
+    total += n;
+  }
+#endif
+}
+
+}  // namespace
+
+void TerminalClient::handleEscapeCommand(const string& rawLine) {
+  const string line = trim(rawLine);
+  if (line.empty()) {
+    return;
+  }
+  // Recognize OpenSSH-style action prefixes "-L "/"-R ". The rest of the
+  // line is a tunnel specification understood by parseRangesToRequests.
+  string action;
+  string rest;
+  if (line.size() >= 2 && line[0] == '-' &&
+      (line[1] == 'L' || line[1] == 'R') &&
+      (line.size() == 2 || line[2] == ' ' || line[2] == '\t')) {
+    action.push_back(line[1]);
+    rest = line.size() > 2 ? trim(line.substr(2)) : string();
+  } else {
+    writeStderrLine("et: unknown command: " + line);
+    writeStderrLine("    supported: -L bind:port:host:hp");
+    return;
+  }
+  if (rest.empty()) {
+    writeStderrLine("et: -" + action + " requires a tunnel argument");
+    return;
+  }
+
+  vector<PortForwardSourceRequest> pfsrs;
+  try {
+    pfsrs = parseRangesToRequests(rest, gatewayPorts);
+  } catch (const TunnelParseException& ex) {
+    writeStderrLine(string("et: ") + ex.what());
+    return;
+  }
+
+  if (action == "L") {
+#ifdef WIN32
+    const uid_t myUid = static_cast<uid_t>(-1);
+    const gid_t myGid = static_cast<gid_t>(-1);
+#else
+    const uid_t myUid = ::getuid();
+    const gid_t myGid = ::getgid();
+#endif
+    for (auto& pfsr : pfsrs) {
+      auto pfsresponse =
+          portForwardHandler->createSource(pfsr, nullptr, myUid, myGid);
+      if (pfsresponse.has_error()) {
+        writeStderrLine("et: could not request local forward: " +
+                        pfsresponse.error());
+        continue;
+      }
+      if (pfsr.has_source() && pfsr.source().has_port() &&
+          pfsr.source().port() == 0 && pfsresponse.has_actual_port()) {
+        std::ostringstream oss;
+        oss << "Allocated port " << pfsresponse.actual_port()
+            << " for local forward to " << pfsr.destination().name() << ":"
+            << pfsr.destination().port();
+        writeStderrLine(oss.str());
+      }
+    }
+  } else {
+    // "-R" is implemented in a later phase; for now, surface an explicit
+    // error so the user does not silently lose the request.
+    writeStderrLine("et: -R is not yet supported via the escape command line");
+  }
+}
+
 void TerminalClient::run(const string& command, const bool noexit) {
   if (console) {
     console->setup();
@@ -233,6 +333,13 @@ void TerminalClient::run(const string& command, const bool noexit) {
 // TE sends/receives data to/from the shell one char at a time.
 #define BUF_SIZE (16 * 1024)
   char b[BUF_SIZE];
+
+  // Filters OpenSSH-style escape sequences (`~.`, `~~`, `~?`, `~C`)
+  // out of the stdin byte stream before they are forwarded to the
+  // remote shell.
+  EscapeProcessor escapeProcessor(
+      [this](const string& line) { handleEscapeCommand(line); },
+      [this]() { shutdown(); });
 
   time_t keepaliveTime = time(NULL) + keepaliveDuration;
   bool waitingOnKeepalive = false;
@@ -332,15 +439,18 @@ void TerminalClient::run(const string& command, const bool noexit) {
             int rc = ::read(consoleFd, b, BUF_SIZE);
             int savedErrno = errno;  // Save errno before any logging
             if (rc > 0) {
-              // VLOG(1) << "Sending byte: " << int(b) << " " << char(b) << " "
-              // << connection->getWriter()->getSequenceNumber();
-              string s(b, rc);
-              et::TerminalBuffer tb;
-              tb.set_buffer(s);
+              // Run the bytes through the escape processor; it returns
+              // the bytes that should still be forwarded (anything not
+              // consumed as part of `~.`, `~~`, `~?`, or `~C`).
+              string s = escapeProcessor.process(b, rc);
+              if (!s.empty()) {
+                et::TerminalBuffer tb;
+                tb.set_buffer(s);
 
-              connection->writePacket(Packet(
-                  TerminalPacketType::TERMINAL_BUFFER, protoToString(tb)));
-              keepaliveTime = time(NULL) + keepaliveDuration;
+                connection->writePacket(Packet(
+                    TerminalPacketType::TERMINAL_BUFFER, protoToString(tb)));
+                keepaliveTime = time(NULL) + keepaliveDuration;
+              }
             } else if (rc == 0) {
               LOG(INFO) << "Console EOF";
               break;

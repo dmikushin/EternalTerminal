@@ -463,6 +463,8 @@ add_library(
   src/terminal/UserTerminalRouter.cpp
   src/terminal/TerminalClient.hpp
   src/terminal/TerminalClient.cpp
+  src/terminal/EscapeProcessor.hpp
+  src/terminal/EscapeProcessor.cpp
   src/terminal/ServerFifoPath.hpp
   src/terminal/ServerFifoPath.cpp
   src/terminal/SshSetupHandler.hpp

@@ -61,6 +61,15 @@ class TerminalClient {
   recursive_mutex shutdownMutex;
   /** @brief Keepalive interval (seconds) sent to the server. */
   int keepaliveDuration;
+  /** @brief Whether unspecified-bind forwards default to 0.0.0.0. */
+  bool gatewayPorts;
+
+  /**
+   * @brief Parses an interactive `~C` command line and dispatches the
+   * associated tunnel-management action. Currently supports `-L` to add
+   * a local forward at runtime.
+   */
+  void handleEscapeCommand(const string& line);
 };
 
 }  // namespace et
