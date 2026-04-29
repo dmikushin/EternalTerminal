@@ -413,6 +413,33 @@ void TerminalServer::runTerminal(
                          protoToString(pfsresponse)));
               break;
             }
+            case et::TerminalPacketType::CANCEL_REVERSE_FORWARD_REQUEST: {
+              // Client requested teardown of a remote listener it set up
+              // earlier (`~C -KR <port>`). Echo the port back regardless,
+              // and surface "no such forward" cleanly so the client can
+              // print a meaningful error.
+              auto cancel = stringToProto<et::PortForwardCancelRequest>(
+                  packet.getPayload());
+              et::PortForwardCancelResponse cancelResp;
+              if (cancel.has_port()) {
+                cancelResp.set_port(cancel.port());
+                const bool removed =
+                    portForwardHandler->cancelSourceByPort(cancel.port());
+                if (!removed) {
+                  cancelResp.set_error(
+                      "no remote forward is bound to that port");
+                } else {
+                  LOG(INFO) << "Cancelled runtime reverse forward on port "
+                            << cancel.port();
+                }
+              } else {
+                cancelResp.set_error("port missing in cancel request");
+              }
+              serverClientState->writePacket(
+                  Packet(TerminalPacketType::CANCEL_REVERSE_FORWARD_RESPONSE,
+                         protoToString(cancelResp)));
+              break;
+            }
             default:
               STFATAL << "Unknown packet type: " << int(packetType);
           }

@@ -53,6 +53,14 @@ class ForwardSourceHandler {
    */
   inline const SocketEndpoint& getSource() const { return source; }
 
+  /**
+   * @brief Closes every accepted (or pending-assignment) client socket.
+   * Used when the user cancels a forward via `~C -KL`/`~C -KR`: the
+   * listener is taken down by the destructor, but in-flight connections
+   * are owned here and must be closed explicitly.
+   */
+  void closeAcceptedSockets();
+
  protected:
   /** @brief Socket helper used to accept connections on the source endpoint. */
   shared_ptr<SocketHandler> socketHandler;

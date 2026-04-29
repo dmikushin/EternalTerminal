@@ -26,6 +26,15 @@ class PortForwardHandler {
   PortForwardSourceResponse createSource(const PortForwardSourceRequest& pfsr,
                                          string* sourceName, uid_t userid,
                                          gid_t groupid);
+  /**
+   * @brief Tears down the active source listener bound to `port` (the
+   * actual OS-assigned port, not the original request value), closing
+   * its accepted client sockets and stopping its listener.
+   *
+   * @return true if a matching source was found and removed; false if
+   * no listener owns that port.
+   */
+  bool cancelSourceByPort(int port);
   /** @brief Creates a remote destination handler that forwards data to a user's
    * socket. */
   PortForwardDestinationResponse createDestination(

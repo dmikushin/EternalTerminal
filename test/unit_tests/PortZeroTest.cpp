@@ -1,5 +1,6 @@
 #include "ForwardSourceHandler.hpp"
 #include "Headers.hpp"
+#include "PortForwardHandler.hpp"
 #include "TcpSocketHandler.hpp"
 #include "TestHeaders.hpp"
 
@@ -76,4 +77,42 @@ TEST_CASE("PortForwardSourceResponse reports actual_port for port=0",
   REQUIRE(fsh.getSource().has_port());
   REQUIRE(fsh.getSource().port() > 0);
   REQUIRE(fsh.getSource().port() < 65536);
+}
+
+TEST_CASE("PortForwardHandler::cancelSourceByPort tears down listener",
+          "[PortZero][Cancel]") {
+  auto network = std::make_shared<TcpSocketHandler>();
+  auto pipes = std::make_shared<TcpSocketHandler>();
+  PortForwardHandler handler(network, pipes);
+
+  PortForwardSourceRequest pfsr;
+  pfsr.mutable_source()->set_name("127.0.0.1");
+  pfsr.mutable_source()->set_port(0);
+  pfsr.mutable_destination()->set_name("127.0.0.1");
+  pfsr.mutable_destination()->set_port(80);
+
+  auto resp = handler.createSource(pfsr, nullptr, /*uid=*/-1, /*gid=*/-1);
+  REQUIRE_FALSE(resp.has_error());
+  REQUIRE(resp.has_actual_port());
+  const int allocated = resp.actual_port();
+  REQUIRE(allocated > 0);
+
+  // Cancelling by the OS-assigned port must succeed and free the
+  // listener so a follow-up listen on that port no longer collides.
+  REQUIRE(handler.cancelSourceByPort(allocated));
+
+  // Cancelling the same port again now finds nothing.
+  REQUIRE_FALSE(handler.cancelSourceByPort(allocated));
+
+  // After cancellation the port is reusable: bind on the same number
+  // explicitly should work without a "tried to listen twice" fatal.
+  PortForwardSourceRequest reuse;
+  reuse.mutable_source()->set_name("127.0.0.1");
+  reuse.mutable_source()->set_port(allocated);
+  reuse.mutable_destination()->set_name("127.0.0.1");
+  reuse.mutable_destination()->set_port(80);
+  auto reuseResp = handler.createSource(reuse, nullptr, /*uid=*/-1,
+                                        /*gid=*/-1);
+  REQUIRE_FALSE(reuseResp.has_error());
+  REQUIRE(handler.cancelSourceByPort(allocated));
 }

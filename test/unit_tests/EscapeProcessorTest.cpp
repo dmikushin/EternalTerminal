@@ -30,7 +30,8 @@ TEST_CASE("Plain typing passes through untouched", "[EscapeProcessor]") {
   REQUIRE(d.terminateCalls == 0);
 }
 
-TEST_CASE("~~ at start of line emits a single tilde", "[EscapeProcessor]") {
+TEST_CASE("Double-tilde at start of line emits a single tilde",
+          "[EscapeProcessor]") {
   Drive d;
   d.run("\n~~hi\n");
   // After the first \n we are at line start. ~~ collapses to one ~ that
@@ -39,7 +40,7 @@ TEST_CASE("~~ at start of line emits a single tilde", "[EscapeProcessor]") {
   REQUIRE(d.commands.empty());
 }
 
-TEST_CASE("~. triggers terminate exactly once", "[EscapeProcessor]") {
+TEST_CASE("Tilde-dot triggers terminate exactly once", "[EscapeProcessor]") {
   Drive d;
   d.run("\n~.");
   // The escape itself never reaches the wire.
@@ -47,7 +48,7 @@ TEST_CASE("~. triggers terminate exactly once", "[EscapeProcessor]") {
   REQUIRE(d.terminateCalls == 1);
 }
 
-TEST_CASE("~ in the middle of a line is literal", "[EscapeProcessor]") {
+TEST_CASE("Tilde in the middle of a line is literal", "[EscapeProcessor]") {
   Drive d;
   d.run("abc~def\n");
   REQUIRE(d.forwarded == "abc~def\n");
@@ -55,7 +56,8 @@ TEST_CASE("~ in the middle of a line is literal", "[EscapeProcessor]") {
   REQUIRE(d.terminateCalls == 0);
 }
 
-TEST_CASE("~? prints help and is consumed", "[EscapeProcessor]") {
+TEST_CASE("Tilde-question prints help and is consumed",
+          "[EscapeProcessor]") {
   Drive d;
   d.run("\n~?after\n");
   // "?after" is not part of the help — only `?` is consumed; "after\n"
@@ -72,7 +74,7 @@ TEST_CASE("Unknown escape verb passes the tilde and verb through",
   REQUIRE(d.forwarded == "\n~Xrest\n");
 }
 
-TEST_CASE("~C accepts a command line on Enter", "[EscapeProcessor]") {
+TEST_CASE("Tilde-C accepts a command line on Enter", "[EscapeProcessor]") {
   Drive d;
   d.run("\n~C-L 8080:host:80\r");
   REQUIRE(d.forwarded == "\n");
@@ -93,7 +95,7 @@ TEST_CASE("Backspace edits the command-mode line", "[EscapeProcessor]") {
   REQUIRE(d.commands[0] == "-L 800:host:80");
 }
 
-TEST_CASE("Ctrl-C aborts a ~C command without dispatching",
+TEST_CASE("Ctrl-C aborts a tilde-C command without dispatching",
           "[EscapeProcessor]") {
   Drive d;
   string input;

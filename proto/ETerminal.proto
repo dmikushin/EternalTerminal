@@ -24,6 +24,13 @@ enum TerminalPacketType {
   // success (including the OS-assigned port for port=0 requests),
   // error set on failure.
   ADD_REVERSE_FORWARD_RESPONSE = 12;
+  // Client asks the server to tear down a previously-established
+  // reverse-forward source identified by its bound port (the
+  // `~C -KR <port>` escape command). Payload is PortForwardCancelRequest.
+  CANCEL_REVERSE_FORWARD_REQUEST = 13;
+  // Server's acknowledgement of a CANCEL_REVERSE_FORWARD_REQUEST.
+  // Payload is PortForwardCancelResponse.
+  CANCEL_REVERSE_FORWARD_RESPONSE = 14;
 }
 
 message TerminalBuffer {
@@ -70,6 +77,23 @@ message PortForwardData {
   optional bytes buffer = 3;
   optional string error = 4;
   optional bool closed = 5;
+}
+
+// Sent by the client to request that an existing reverse-forward source
+// (i.e. a remote listener established at startup or by `~C -R`) be torn
+// down. Identified by the OS-assigned port that the listener is bound
+// to — the same number ssh prints in its "Allocated port N" notice.
+message PortForwardCancelRequest {
+  optional int32 port = 1;
+}
+
+// Server's response to PortForwardCancelRequest. `port` echoes the
+// request so a client tracking multiple in-flight cancels can correlate
+// without an explicit FIFO. `error` is set when no listener owned that
+// port (or another failure occurred).
+message PortForwardCancelResponse {
+  optional int32 port = 1;
+  optional string error = 2;
 }
 
 message InitialPayload {

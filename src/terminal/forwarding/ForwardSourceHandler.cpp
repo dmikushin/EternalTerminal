@@ -149,4 +149,15 @@ void ForwardSourceHandler::closeSocket(int socketId) {
     socketFdMap.erase(it);
   }
 }
+
+void ForwardSourceHandler::closeAcceptedSockets() {
+  for (auto& kv : socketFdMap) {
+    socketHandler->close(kv.second);
+  }
+  socketFdMap.clear();
+  for (int fd : unassignedFds) {
+    socketHandler->close(fd);
+  }
+  unassignedFds.clear();
+}
 }  // namespace et

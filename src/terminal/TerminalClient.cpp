@@ -266,22 +266,73 @@ void TerminalClient::handleEscapeCommand(const string& rawLine) {
   if (line.empty()) {
     return;
   }
-  // Recognize OpenSSH-style action prefixes "-L "/"-R ". The rest of the
-  // line is a tunnel specification understood by parseRangesToRequests.
+  // Recognize OpenSSH-style action prefixes: "-L "/"-R " for additions
+  // and "-KL "/"-KR " for cancellations. The rest of the line is either
+  // a tunnel specification (parseRangesToRequests) or a port number.
   string action;
   string rest;
-  if (line.size() >= 2 && line[0] == '-' &&
-      (line[1] == 'L' || line[1] == 'R') &&
-      (line.size() == 2 || line[2] == ' ' || line[2] == '\t')) {
-    action.push_back(line[1]);
-    rest = line.size() > 2 ? trim(line.substr(2)) : string();
+  auto consumeActionToken = [&](const string& token) -> bool {
+    const size_t n = token.size();
+    if (line.size() >= n && line.compare(0, n, token) == 0 &&
+        (line.size() == n || line[n] == ' ' || line[n] == '\t')) {
+      action = token.substr(1);  // Strip the leading '-' for messages.
+      rest = line.size() > n ? trim(line.substr(n)) : string();
+      return true;
+    }
+    return false;
+  };
+  if (consumeActionToken("-KL") || consumeActionToken("-KR") ||
+      consumeActionToken("-L") || consumeActionToken("-R")) {
+    // Matched.
   } else {
     writeStderrLine("et: unknown command: " + line);
-    writeStderrLine("    supported: -L bind:port:host:hp");
+    writeStderrLine("    supported: -L spec, -R spec, -KL port, -KR port");
     return;
   }
   if (rest.empty()) {
-    writeStderrLine("et: -" + action + " requires a tunnel argument");
+    writeStderrLine("et: -" + action + " requires an argument");
+    return;
+  }
+
+  // Cancellations take a single port and do not go through the tunnel
+  // parser at all.
+  if (action == "KL" || action == "KR") {
+    int port = 0;
+    try {
+      size_t consumed = 0;
+      port = std::stoi(rest, &consumed);
+      if (consumed != rest.size() || port <= 0 || port > 65535) {
+        throw std::invalid_argument("port out of range");
+      }
+    } catch (const std::exception&) {
+      writeStderrLine(string("et: -") + action +
+                      " expects a port number, got: " + rest);
+      return;
+    }
+    if (action == "KL") {
+      const bool removed = portForwardHandler->cancelSourceByPort(port);
+      if (removed) {
+        std::ostringstream oss;
+        oss << "Cancelled local forward on port " << port;
+        writeStderrLine(oss.str());
+      } else {
+        std::ostringstream oss;
+        oss << "et: no local forward is bound to port " << port;
+        writeStderrLine(oss.str());
+      }
+    } else {
+      // -KR: round-trip to the server.
+      et::PortForwardCancelRequest cancelReq;
+      cancelReq.set_port(port);
+      try {
+        connection->writePacket(
+            Packet(TerminalPacketType::CANCEL_REVERSE_FORWARD_REQUEST,
+                   protoToString(cancelReq)));
+      } catch (const std::runtime_error& ex) {
+        writeStderrLine(string("et: failed to send cancel request: ") +
+                        ex.what());
+      }
+    }
     return;
   }
 
@@ -555,6 +606,23 @@ void TerminalClient::run(const string& command, const bool noexit) {
                     << ":" << pending.destinationPort;
                 writeStderrLine(oss.str());
               }
+              break;
+            }
+            case et::TerminalPacketType::CANCEL_REVERSE_FORWARD_RESPONSE: {
+              auto resp = stringToProto<et::PortForwardCancelResponse>(
+                  packet.getPayload());
+              std::ostringstream oss;
+              if (resp.has_error()) {
+                oss << "et: could not cancel remote forward";
+                if (resp.has_port()) {
+                  oss << " on port " << resp.port();
+                }
+                oss << ": " << resp.error();
+              } else {
+                oss << "Cancelled remote forward on port "
+                    << (resp.has_port() ? resp.port() : 0);
+              }
+              writeStderrLine(oss.str());
               break;
             }
             default:

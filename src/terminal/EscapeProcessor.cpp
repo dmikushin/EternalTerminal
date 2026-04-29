@@ -24,7 +24,11 @@ void EscapeProcessor::emitHelp() const {
   writeStderr(
       "\r\nSupported escape sequences:\r\n"
       "  ~.   - terminate session\r\n"
-      "  ~C   - open a command line (then -L/-R bind:port:host:hp)\r\n"
+      "  ~C   - open a command line. Available commands:\r\n"
+      "           -L  bind:port:host:hp   add a local forward\r\n"
+      "           -R  bind:port:host:hp   add a remote forward\r\n"
+      "           -KL port                cancel a local forward\r\n"
+      "           -KR port                cancel a remote forward\r\n"
       "  ~?   - this message\r\n"
       "  ~~   - send the escape character by typing it twice\r\n"
       "(Note that escapes are only recognized immediately after newline.)\r\n");

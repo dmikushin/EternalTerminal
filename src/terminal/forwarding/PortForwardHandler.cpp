@@ -103,6 +103,31 @@ PortForwardSourceResponse PortForwardHandler::createSource(
   }
 }
 
+bool PortForwardHandler::cancelSourceByPort(int port) {
+  for (auto it = sourceHandlers.begin(); it != sourceHandlers.end(); ++it) {
+    const auto& src = (*it)->getSource();
+    if (src.has_port() && src.port() == port) {
+      // Drop accepted/in-flight client sockets, then erase the handler.
+      // Its destructor calls socketHandler->stopListening() to close the
+      // listener fd(s).
+      (*it)->closeAcceptedSockets();
+      // Drop any control-channel routing entries that point at this
+      // handler so future PORT_FORWARD_DATA packets are ignored cleanly.
+      for (auto mapIt = socketIdSourceHandlerMap.begin();
+           mapIt != socketIdSourceHandlerMap.end();) {
+        if (mapIt->second == *it) {
+          mapIt = socketIdSourceHandlerMap.erase(mapIt);
+        } else {
+          ++mapIt;
+        }
+      }
+      sourceHandlers.erase(it);
+      return true;
+    }
+  }
+  return false;
+}
+
 PortForwardDestinationResponse PortForwardHandler::createDestination(
     const PortForwardDestinationRequest& pfdr) {
   int fd = -1;
