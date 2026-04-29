@@ -455,8 +455,12 @@ add_library(
   src/terminal/forwarding/PortForwardHandler.cpp
   src/terminal/forwarding/ForwardSourceHandler.hpp
   src/terminal/forwarding/ForwardSourceHandler.cpp
+  src/terminal/forwarding/DynamicForwardSourceHandler.hpp
+  src/terminal/forwarding/DynamicForwardSourceHandler.cpp
   src/terminal/forwarding/ForwardDestinationHandler.hpp
   src/terminal/forwarding/ForwardDestinationHandler.cpp
+  src/terminal/forwarding/Socks5Handshake.hpp
+  src/terminal/forwarding/Socks5Handshake.cpp
   src/terminal/TerminalServer.hpp
   src/terminal/TerminalServer.cpp
   src/terminal/UserTerminalRouter.hpp

@@ -26,6 +26,19 @@ class PortForwardHandler {
   PortForwardSourceResponse createSource(const PortForwardSourceRequest& pfsr,
                                          string* sourceName, uid_t userid,
                                          gid_t groupid);
+
+  /**
+   * @brief Brings up a dynamic (SOCKS5) forward listener bound to
+   * `source`. Equivalent to `ssh -D [bind_address:]port`. Per-connection
+   * destinations are extracted from the SOCKS5 handshake and translated
+   * into ordinary `PortForwardDestinationRequest`s, so the server side
+   * needs no changes.
+   *
+   * @return PortForwardSourceResponse with `actual_port` set to the
+   * OS-assigned port (matters for `port=0` requests). `error` is set if
+   * the listener could not be bound.
+   */
+  PortForwardSourceResponse createDynamicSource(const SocketEndpoint& source);
   /**
    * @brief Tears down the active source listener bound to `port` (the
    * actual OS-assigned port, not the original request value), closing

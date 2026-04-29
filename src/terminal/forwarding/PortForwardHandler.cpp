@@ -1,5 +1,7 @@
 #include "PortForwardHandler.hpp"
 
+#include "DynamicForwardSourceHandler.hpp"
+
 namespace et {
 PortForwardHandler::PortForwardHandler(
     shared_ptr<SocketHandler> _networkSocketHandler,
@@ -18,6 +20,10 @@ void PortForwardHandler::update(vector<PortForwardDestinationRequest>* requests,
       pfr.set_fd(fd);
       requests->push_back(pfr);
     }
+    // Dynamic handlers defer their request emission until the SOCKS
+    // handshake parses a destination. The static path above is a no-op
+    // for them because their `listen()` always returns -1.
+    it->pollPendingRequests(requests);
   }
 
   for (auto& it : destinationHandlers) {
@@ -126,6 +132,24 @@ bool PortForwardHandler::cancelSourceByPort(int port) {
     }
   }
   return false;
+}
+
+PortForwardSourceResponse PortForwardHandler::createDynamicSource(
+    const SocketEndpoint& source) {
+  try {
+    auto handler = shared_ptr<DynamicForwardSourceHandler>(
+        new DynamicForwardSourceHandler(networkSocketHandler, source));
+    PortForwardSourceResponse response;
+    if (handler->getSource().has_port()) {
+      response.set_actual_port(handler->getSource().port());
+    }
+    sourceHandlers.push_back(handler);
+    return response;
+  } catch (const std::runtime_error& ex) {
+    PortForwardSourceResponse err;
+    err.set_error(ex.what());
+    return err;
+  }
 }
 
 PortForwardDestinationResponse PortForwardHandler::createDestination(

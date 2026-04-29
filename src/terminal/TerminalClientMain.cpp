@@ -122,6 +122,14 @@ int main(int argc, char** argv) {
          "and ET-style variants accepted by -L). May be specified multiple "
          "times.",
          cxxopts::value<std::vector<std::string>>())  //
+        ("D,dynamic-forward",
+         "Dynamic application-level forwarding, identical syntax and "
+         "semantics to ssh(1) -D: [bind_address:]port. The client opens a "
+         "SOCKS5 listener on the given port and tunnels each incoming "
+         "SOCKS CONNECT request through the ET session, with the server "
+         "performing the upstream connection. May be specified multiple "
+         "times.",
+         cxxopts::value<std::vector<std::string>>())  //
         ("g,gateway-ports",
          "Allow remote hosts to connect to local forwarded ports. Equivalent "
          "to ssh -g: forwards specified with -L that omit a bind address "
@@ -381,6 +389,7 @@ int main(int argc, char** argv) {
     };
     string tunnel_arg = joinMultiTunnelArg("local-forward");
     string r_tunnel_arg = joinMultiTunnelArg("remote-forward");
+    string d_tunnel_arg = joinMultiTunnelArg("dynamic-forward");
 
     for (const auto& localForward : sshConfigOptions.local_forwards) {
       string tunnelEntry =
@@ -404,7 +413,7 @@ int main(int argc, char** argv) {
     TerminalClient terminalClient(
         clientSocket, clientPipeSocket, socketEndpoint, idpasskeypair.first,
         idpasskeypair.second, console, is_jumphost, tunnel_arg, r_tunnel_arg,
-        result.count("gateway-ports") > 0,
+        d_tunnel_arg, result.count("gateway-ports") > 0,
         result.count("exit-on-forward-failure") > 0, forwardAgent, sshSocket,
         keepaliveDuration, sshConfigOptions.env_vars);
     terminalClient.run(

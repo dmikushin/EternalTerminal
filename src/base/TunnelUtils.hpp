@@ -28,6 +28,18 @@ vector<string> parseSshTunnelArg(const string& input);
 string joinTunnelArgs(const vector<string>& parts);
 
 /**
+ * @brief Parses a comma-separated list of `-D`/`--dynamic-forward` arguments
+ * into the listener endpoints to bind. Each argument is `[bind_address:]port`
+ * (matching ssh -D); a port-only argument defaults the bind address to
+ * 127.0.0.1 (or 0.0.0.0 when `gatewayPorts` is true). Bracketed IPv6
+ * literals (`[::1]:1080`) and the `*:port` wildcard are accepted.
+ *
+ * @throws TunnelParseException on a malformed argument.
+ */
+vector<SocketEndpoint> parseDynamicForwardArgs(const string& input,
+                                               bool gatewayPorts = false);
+
+/**
  * @brief Thrown when an invalid tunnel source/destination string is
  * encountered.
  */

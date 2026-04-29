@@ -17,32 +17,41 @@ class ForwardSourceHandler {
                        const SocketEndpoint& _source,
                        const SocketEndpoint& _destination);
 
-  ~ForwardSourceHandler();
+  virtual ~ForwardSourceHandler();
 
   /** @brief Starts listening on the source endpoint and returns the server fd.
    */
-  int listen();
+  virtual int listen();
 
   /** @brief Polls all active sockets and stages `PortForwardData` for
    * destinations. */
-  void update(vector<PortForwardData>* data);
+  virtual void update(vector<PortForwardData>* data);
+
+  /** @brief Lets dynamic-forward subclasses surface deferred
+   * `PortForwardDestinationRequest`s once they have, e.g., completed a
+   * SOCKS handshake on a freshly-accepted connection. The base
+   * (static-forward) implementation does nothing because static
+   * forwards emit their request synchronously from `listen()`.
+   */
+  virtual void pollPendingRequests(
+      vector<PortForwardDestinationRequest>* /*requests*/) {}
 
   /** @brief Returns true if an accepted socket is pending assignment. */
-  bool hasUnassignedFd(int fd);
+  virtual bool hasUnassignedFd(int fd);
 
   /** @brief Closes sockets that were accepted but not yet assigned an ID. */
-  void closeUnassignedFd(int fd);
+  virtual void closeUnassignedFd(int fd);
 
   /** @brief Maps a socketId (from the control channel) to a pending fd. */
-  void addSocket(int socketId, int sourceFd);
+  virtual void addSocket(int socketId, int sourceFd);
 
   /** @brief Closes the socket mapped to `socketId`. */
-  void closeSocket(int socketId);
+  virtual void closeSocket(int socketId);
 
   /** @brief Sends bytes from the remote side down the local source socket. */
-  void sendDataOnSocket(int socketId, const string& data);
+  virtual void sendDataOnSocket(int socketId, const string& data);
 
-  void getActiveFds(set<int>* fds);
+  virtual void getActiveFds(set<int>* fds);
 
   inline SocketEndpoint getDestination() { return destination; }
 

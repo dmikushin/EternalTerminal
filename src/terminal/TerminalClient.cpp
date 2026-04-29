@@ -6,17 +6,15 @@
 
 namespace et {
 
-TerminalClient::TerminalClient(shared_ptr<SocketHandler> _socketHandler,
-                               shared_ptr<SocketHandler> _pipeSocketHandler,
-                               const SocketEndpoint& _socketEndpoint,
-                               const string& id, const string& passkey,
-                               shared_ptr<Console> _console, bool jumphost,
-                               const string& tunnels,
-                               const string& reverseTunnels, bool gatewayPorts,
-                               bool exitOnForwardFailure, bool forwardSshAgent,
-                               const string& identityAgent,
-                               int _keepaliveDuration,
-                               const vector<pair<string, string>>& envVars)
+TerminalClient::TerminalClient(
+    shared_ptr<SocketHandler> _socketHandler,
+    shared_ptr<SocketHandler> _pipeSocketHandler,
+    const SocketEndpoint& _socketEndpoint, const string& id,
+    const string& passkey, shared_ptr<Console> _console, bool jumphost,
+    const string& tunnels, const string& reverseTunnels,
+    const string& dynamicTunnels, bool gatewayPorts, bool exitOnForwardFailure,
+    bool forwardSshAgent, const string& identityAgent, int _keepaliveDuration,
+    const vector<pair<string, string>>& envVars)
     : console(_console),
       shuttingDown(false),
       keepaliveDuration(_keepaliveDuration),
@@ -96,6 +94,40 @@ TerminalClient::TerminalClient(shared_ptr<SocketHandler> _socketHandler,
                  ? pfsr.destination().port()
                  : 0});
         *(payload.add_reversetunnels()) = pfsr;
+      }
+    }
+    if (dynamicTunnels.length()) {
+      // Dynamic (-D) forwards open a SOCKS5 listener on the client; each
+      // accepted connection learns its destination from the SOCKS request
+      // before being tunneled. Argument syntax is `[bind_address:]port`,
+      // exactly like ssh -D.
+      vector<SocketEndpoint> listeners;
+      try {
+        listeners = parseDynamicForwardArgs(dynamicTunnels, gatewayPorts);
+      } catch (const TunnelParseException& ex) {
+        CLOG(INFO, "stderr") << "et: " << ex.what() << endl;
+        if (exitOnForwardFailure) exit(1);
+      }
+      for (auto& listener : listeners) {
+        auto resp = portForwardHandler->createDynamicSource(listener);
+        if (resp.has_error()) {
+          if (exitOnForwardFailure) {
+            CLOG(INFO, "stderr")
+                << "Could not start dynamic forward on " << listener.name()
+                << ":" << listener.port() << ": " << resp.error() << endl;
+            exit(1);
+          }
+          LOG(WARNING) << "Failed to start dynamic forward on "
+                       << listener.name() << ":" << listener.port() << ": "
+                       << resp.error();
+          continue;
+        }
+        if (listener.has_port() && listener.port() == 0 &&
+            resp.has_actual_port()) {
+          CLOG(INFO, "stderr")
+              << "Allocated port " << resp.actual_port()
+              << " for dynamic forward on " << listener.name() << endl;
+        }
       }
     }
     if (forwardSshAgent) {

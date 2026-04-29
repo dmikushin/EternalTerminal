@@ -303,4 +303,47 @@ string joinTunnelArgs(const vector<string>& parts) {
   return joined;
 }
 
+vector<SocketEndpoint> parseDynamicForwardArgs(const string& input,
+                                               bool gatewayPorts) {
+  vector<SocketEndpoint> result;
+  for (auto& segment : split(input, ',')) {
+    if (segment.empty()) continue;
+    auto parts = splitTunnelByColon(segment);
+    SocketEndpoint endpoint;
+    string bind;
+    string portStr;
+    if (parts.size() == 1) {
+      // bare port — bind defaults to loopback (or 0.0.0.0 with -g).
+      bind = gatewayPorts ? "0.0.0.0" : "127.0.0.1";
+      portStr = parts[0];
+    } else if (parts.size() == 2) {
+      bind = parts[0];
+      portStr = parts[1];
+      if (bind.empty() || bind == "*") {
+        bind = "0.0.0.0";
+      }
+    } else {
+      throw TunnelParseException(
+          "Dynamic forward argument must be `[bind_address:]port`: '" +
+          segment + "'");
+    }
+    int port = 0;
+    try {
+      size_t consumed = 0;
+      port = std::stoi(portStr, &consumed);
+      if (consumed != portStr.size() || port < 0 || port > 65535) {
+        throw std::invalid_argument("port out of range");
+      }
+    } catch (const std::exception&) {
+      throw TunnelParseException(
+          "Dynamic forward port must be a number 0-65535, got: '" + portStr +
+          "'");
+    }
+    endpoint.set_name(bind);
+    endpoint.set_port(port);
+    result.push_back(endpoint);
+  }
+  return result;
+}
+
 }  // namespace et
