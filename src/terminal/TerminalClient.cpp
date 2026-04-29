@@ -42,7 +42,7 @@ TerminalClient::TerminalClient(shared_ptr<SocketHandler> _socketHandler,
 
   try {
     if (tunnels.length()) {
-      // Forward (-t/-L) tunnels: gateway-ports applies, mirroring ssh -g.
+      // Forward (-L) tunnels: gateway-ports applies, mirroring ssh -g.
       auto pfsrs = parseRangesToRequests(tunnels, gatewayPorts);
 #ifdef WIN32
       const uid_t myUid = static_cast<uid_t>(-1);
@@ -79,9 +79,9 @@ TerminalClient::TerminalClient(shared_ptr<SocketHandler> _socketHandler,
       }
     }
     if (reverseTunnels.length()) {
-      // Reverse (-r/-R) tunnels bind on the server. OpenSSH controls this via
+      // Reverse (-R) tunnels bind on the server. OpenSSH controls this via
       // sshd's GatewayPorts setting, not the client's -g flag, so we never
-      // apply gateway-ports here. Users wanting wildcard for -r should use
+      // apply gateway-ports here. Users wanting wildcard for -R should use
       // explicit ssh-style "*:port:host:hp" or "0.0.0.0:port:host:hp".
       auto pfsrs = parseRangesToRequests(reverseTunnels);
       for (auto& pfsr : pfsrs) {

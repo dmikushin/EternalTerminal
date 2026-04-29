@@ -21,7 +21,7 @@ vector<string> parseSshTunnelArg(const string& input);
 
 /**
  * @brief Joins multiple tunnel argument strings (typically one per occurrence
- * of `-t`/`-r` on the command line) into a single comma-separated string
+ * of `-L`/`-R` on the command line) into a single comma-separated string
  * suitable for `parseRangesToRequests`. Empty entries are skipped so that the
  * result has no leading/trailing/repeated commas.
  */

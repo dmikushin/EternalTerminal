@@ -17,7 +17,7 @@ _et() {
             _known_hosts_real -- "$cur"
             return
             ;;
-        --port|--jport|--tunnel|--reversetunnel|--keepalive)
+        --port|--jport|--local-forward|--remote-forward|-L|-R|--keepalive)
             return
             ;;
         --username|-u)
@@ -37,11 +37,12 @@ _et() {
         COMPREPLY=($(compgen -W "
             --help --version --verbose --command --forward-ssh-agent
             --host --jumphost --jport --kill-other-sessions --logtostdout
-            --no-terminal --tunnel --reversetunnel --port --silent
+            --no-terminal --local-forward --remote-forward --gateway-ports
+            --exit-on-forward-failure --port --silent
             --serverfifo --ssh-socket --username --noexit --jserverfifo
             --macserver --keepalive --logdir --telemetry --terminal-path
             --ssh-option
-            -N -c -f -h -p -r -t -u -v -x -e -k -l -o
+            -N -c -f -g -h -p -L -R -u -v -x -e -k -l -o
         " -- "$cur"))
         return
     fi

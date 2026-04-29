@@ -108,23 +108,27 @@ int main(int argc, char** argv) {
          "Path to etterminal on server side. "
          "Use if etterminal is not on the system path.",
          cxxopts::value<std::string>())  //
-        ("t,tunnel",
-         "Tunnel: Array of source:destination ports or "
-         "srcStart-srcEnd:dstStart-dstEnd (inclusive) port ranges (e.g. "
-         "10080:80,10443:443, 10090-10092:8000-8002) or ssh-style -L/-R "
-         "argument. Defaults to localhost for bind address unless ssh-style "
-         "tunnel argument is used. May be specified multiple times; values "
-         "are concatenated.",
+        ("L,local-forward",
+         "Local port forwarding, identical syntax and semantics to "
+         "ssh(1) -L: [bind_address:]port:host:hostport, "
+         "[bind_address:]port:remote_socket, local_socket:host:hostport, or "
+         "local_socket:remote_socket. May be specified multiple times. "
+         "ET-style port pairs ('8080:80', '8000-8002:9000-9002') and a "
+         "comma-separated list inside one option are also accepted.",
          cxxopts::value<std::vector<std::string>>())  //
-        ("r,reversetunnel", "Reverse Tunnel: See doc for -t/--tunnel.",
+        ("R,remote-forward",
+         "Remote port forwarding, identical syntax and semantics to "
+         "ssh(1) -R: [bind_address:]port:host:hostport (and the UNIX-socket "
+         "and ET-style variants accepted by -L). May be specified multiple "
+         "times.",
          cxxopts::value<std::vector<std::string>>())  //
         ("g,gateway-ports",
          "Allow remote hosts to connect to local forwarded ports. Equivalent "
-         "to ssh -g: forwards specified with -t/--tunnel that omit a bind "
-         "address default to 0.0.0.0 instead of 127.0.0.1. Has no effect on "
-         "reverse tunnels (use explicit *:port:host:hp for those).")  //
+         "to ssh -g: forwards specified with -L that omit a bind address "
+         "default to 0.0.0.0 instead of 127.0.0.1. Has no effect on remote "
+         "forwards (use explicit *:port:host:hp for those).")  //
         ("exit-on-forward-failure",
-         "Exit with a non-zero status if any -t/-r forward cannot be "
+         "Exit with a non-zero status if any -L/-R forward cannot be "
          "established. Equivalent to ssh ExitOnForwardFailure=yes. Default "
          "is to log failures and continue.")  //
         ("jumphost", "jumphost between localhost and destination",
@@ -372,13 +376,11 @@ int main(int argc, char** argv) {
     TelemetryService::get()->logToDatadog("Session Started", el::Level::Info,
                                           __FILE__, __LINE__);
     auto joinMultiTunnelArg = [&](const string& name) -> string {
-      if (!result.count(name)) {
-        return "";
-      }
+      if (!result.count(name)) return "";
       return joinTunnelArgs(result[name].as<std::vector<std::string>>());
     };
-    string tunnel_arg = joinMultiTunnelArg("tunnel");
-    string r_tunnel_arg = joinMultiTunnelArg("reversetunnel");
+    string tunnel_arg = joinMultiTunnelArg("local-forward");
+    string r_tunnel_arg = joinMultiTunnelArg("remote-forward");
 
     for (const auto& localForward : sshConfigOptions.local_forwards) {
       string tunnelEntry =

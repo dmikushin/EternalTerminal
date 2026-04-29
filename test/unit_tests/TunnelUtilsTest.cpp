@@ -172,7 +172,7 @@ TEST_CASE("Mixes ssh-style and et-style across comma list", "[TunnelUtils]") {
   REQUIRE(requests[2].destination().port() == 443);
 }
 
-TEST_CASE("Joins tunnel args from multiple -t/-r occurrences",
+TEST_CASE("Joins tunnel args from multiple -L/-R occurrences",
           "[TunnelUtils]") {
   SECTION("Empty input yields empty string") {
     REQUIRE(joinTunnelArgs({}) == "");

@@ -126,7 +126,7 @@ Port forwarding is supported in Eternal Terminal using the same connection that 
 
 ![Simple Connection with Port Forwarding](images/port_forwarding.png)
 
-Forward port forwarding listens to a port on the client, and forwards connections to it to the server, which "tunnels" the connection to the server's port. It is activated by passing either a `-t` (or `--tunnel`) parameter to `et`, and providing a source and destination port or range.
+Forward port forwarding listens to a port on the client, and forwards connections to it to the server, which "tunnels" the connection to the server's port. It is activated by passing either a `-L` (or `--local-forward`) parameter to `et`, with the same syntax as `ssh -L`. ET-style port pairs and ranges (e.g. `8080:80`, `8000-8002:9000-9002`) are also accepted.
 
 The port range is in the form of `source:destination` or `srcStart-srcStart-srcEnd:dstStart-dstEnd` (inclusive), where `source` is the port on the client, and `destination` is the port on the server.  Multiple ports may be forwarded by specifying a comma-separated list.
 
@@ -176,7 +176,7 @@ To establish port forwarding:
 
 ### Reverse Port Forwarding
 
-Reverse port forwarding is available by providing the `-r` or `--reversetunnel` parameter, and accepts the same port range parameter as forward tunnels. These are in the form of `source:destination` or `srcStart-srcStart-srcEnd:dstStart-dstEnd` (inclusive), where `source` is the port on the *server*, and `destination` is the port on the `client`.  Multiple ports may be forwarded by specifying a comma-separated list.
+Reverse port forwarding is available by providing the `-R` or `--remote-forward` parameter, with the same syntax as `ssh -R`. ET-style port pairs and ranges (`source:destination`, `srcStart-srcEnd:dstStart-dstEnd`) are also accepted, where `source` is the port on the *server*, and `destination` is the port on the `client`.  Multiple ports may be forwarded by specifying a comma-separated list, or by repeating `-R`.
 
 It's also possible to forward Unix sockets, by using the syntax of `ENV_VAR_NAME:/var/run/example.sock`, which will create a temporary file on the server and forward it to `/var/run/example.sock` on the client.  It will then set the temporary file path to the provided environment variable, `ENV_VAR_NAME` in this case.
 
