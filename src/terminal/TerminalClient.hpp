@@ -65,9 +65,23 @@ class TerminalClient {
   bool gatewayPorts;
 
   /**
+   * @brief FIFO queue of in-flight ADD_REVERSE_FORWARD requests sent via
+   * the `~C -R ...` escape command. Each entry remembers what the user
+   * asked for so the announcement printed when the server's
+   * ADD_REVERSE_FORWARD_RESPONSE arrives can name the destination.
+   */
+  struct PendingReverseAdd {
+    bool dynamicPort;
+    string destinationName;
+    int destinationPort;
+  };
+  deque<PendingReverseAdd> pendingReverseAdds;
+
+  /**
    * @brief Parses an interactive `~C` command line and dispatches the
    * associated tunnel-management action. Currently supports `-L` to add
-   * a local forward at runtime.
+   * a local forward at runtime and `-R` to add a remote forward (the
+   * latter is sent to the server as ADD_REVERSE_FORWARD_REQUEST).
    */
   void handleEscapeCommand(const string& line);
 };

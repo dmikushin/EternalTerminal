@@ -319,9 +319,29 @@ void TerminalClient::handleEscapeCommand(const string& rawLine) {
       }
     }
   } else {
-    // "-R" is implemented in a later phase; for now, surface an explicit
-    // error so the user does not silently lose the request.
-    writeStderrLine("et: -R is not yet supported via the escape command line");
+    // "-R" must round-trip through the server: the listener binds on the
+    // remote side. Send each parsed request and remember the user-facing
+    // destination so the ADD_REVERSE_FORWARD_RESPONSE handler can echo
+    // an "Allocated port ..." line that mentions the right host.
+    for (auto& pfsr : pfsrs) {
+      PendingReverseAdd pending{
+          pfsr.has_source() && pfsr.source().has_port() &&
+              pfsr.source().port() == 0,
+          pfsr.has_destination() ? pfsr.destination().name() : string(),
+          pfsr.has_destination() && pfsr.destination().has_port()
+              ? pfsr.destination().port()
+              : 0};
+      pendingReverseAdds.push_back(pending);
+      try {
+        connection->writePacket(
+            Packet(TerminalPacketType::ADD_REVERSE_FORWARD_REQUEST,
+                   protoToString(pfsr)));
+      } catch (const std::runtime_error& ex) {
+        pendingReverseAdds.pop_back();
+        writeStderrLine(string("et: failed to send remote-forward request: ") +
+                        ex.what());
+      }
+    }
   }
 }
 
@@ -509,6 +529,34 @@ void TerminalClient::run(const string& command, const bool noexit) {
               // latency issues.
               LOG(INFO) << "Got a keepalive";
               break;
+            case et::TerminalPacketType::ADD_REVERSE_FORWARD_RESPONSE: {
+              auto resp = stringToProto<et::PortForwardSourceResponse>(
+                  packet.getPayload());
+              PendingReverseAdd pending{};
+              const bool havePending = !pendingReverseAdds.empty();
+              if (havePending) {
+                pending = pendingReverseAdds.front();
+                pendingReverseAdds.pop_front();
+              }
+              if (resp.has_error()) {
+                std::ostringstream oss;
+                oss << "et: could not request remote forward";
+                if (havePending) {
+                  oss << " to " << pending.destinationName << ":"
+                      << pending.destinationPort;
+                }
+                oss << ": " << resp.error();
+                writeStderrLine(oss.str());
+              } else if (havePending && pending.dynamicPort &&
+                         resp.has_actual_port()) {
+                std::ostringstream oss;
+                oss << "Allocated port " << resp.actual_port()
+                    << " for remote forward to " << pending.destinationName
+                    << ":" << pending.destinationPort;
+                writeStderrLine(oss.str());
+              }
+              break;
+            }
             default:
               STFATAL << "Unknown packet type: " << int(packetType);
           }

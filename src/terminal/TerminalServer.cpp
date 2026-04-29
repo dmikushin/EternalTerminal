@@ -393,6 +393,26 @@ void TerminalServer::runTerminal(
               terminalSocketHandler->writeProto(terminalFd, ti, false);
               break;
             }
+            case et::TerminalPacketType::ADD_REVERSE_FORWARD_REQUEST: {
+              // Client requested a runtime reverse forward (`~C -R ...`).
+              // Bind the source on this side; relay the response back.
+              auto pfsr = stringToProto<et::PortForwardSourceRequest>(
+                  packet.getPayload());
+              LOG(INFO) << "Adding runtime reverse forward to "
+                        << (pfsr.has_destination() ? pfsr.destination().name()
+                                                   : string("?"))
+                        << ":"
+                        << (pfsr.has_destination() &&
+                                    pfsr.destination().has_port()
+                                ? pfsr.destination().port()
+                                : 0);
+              auto pfsresponse = portForwardHandler->createSource(
+                  pfsr, nullptr, userInfo.uid(), userInfo.gid());
+              serverClientState->writePacket(
+                  Packet(TerminalPacketType::ADD_REVERSE_FORWARD_RESPONSE,
+                         protoToString(pfsresponse)));
+              break;
+            }
             default:
               STFATAL << "Unknown packet type: " << int(packetType);
           }
