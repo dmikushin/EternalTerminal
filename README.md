@@ -1,177 +1,85 @@
-# Eternal Terminal
+# Eternal Terminal (SSH-compatibility fork)
 
 Eternal Terminal is a remote shell that automatically reconnects without interrupting the session.
 
-Website: <https://mistertea.github.io/EternalTerminal/>.
+This fork adds **full OpenSSH-compatible port forwarding** (`-L`, `-R`, `-D`) and escape sequences (`~C`, `~.`, `~?`), making `et` a drop-in replacement for `ssh` in tunneling scenarios.
 
-## Packaging status
-
-[![Packaging
-status](https://repology.org/badge/vertical-allrepos/eternalterminal.svg?exclude_unsupported=1)](https://repology.org/project/eternalterminal/versions)
+Upstream: <https://github.com/MisterTea/EternalTerminal>
 
 ## Installing
 
-### macOS
+### Static binaries (any Linux, no dependencies)
 
-The easiest way to install `et`is by using Homebrew:
+Download a fully static musl-linked binary from the
+[latest release](https://github.com/dmikushin/EternalTerminal/releases/latest):
 
 ```bash
-brew install et
+# x86_64
+curl -LO https://github.com/dmikushin/EternalTerminal/releases/download/v6.2.11/et-v6.2.11-linux-x86_64.tar.gz
+tar xzf et-v6.2.11-linux-x86_64.tar.gz
+
+# aarch64
+curl -LO https://github.com/dmikushin/EternalTerminal/releases/download/v6.2.11/et-v6.2.11-linux-arm64.tar.gz
+tar xzf et-v6.2.11-linux-arm64.tar.gz
+
+# Install (client: et; server: etserver + etterminal)
+sudo install -m 0755 et-* etserver-* etterminal-* /usr/local/bin/
 ```
 
-If the install fails on including csignal, see https://github.com/MisterTea/EternalTerminal/issues/662#issuecomment-2408889829
+### macOS (Homebrew)
 
-Then if you want a daemon to launch `etserver` on every boot:
+The upstream Homebrew formula installs `et` without the forwarding extensions.
+To get this fork's features, build from source (see below).
 
-On m1 (Apple Silicon) Macs:
+### Docker
 
-```bash
-sudo sed 's:/usr/local/bin/etserver:/opt/homebrew/bin/etserver:g' ../init/launchd/homebrew.mxcl.et.plist | sudo tee /Library/LaunchDaemons/homebrew.mxcl.et.plist
-sudo launchctl load -w /Library/LaunchDaemons/homebrew.mxcl.et.plist
-```
+See the [autoet](https://github.com/dmikushin/autossh-docker) container for
+a ready-made tunnel image that uses this fork.
 
-On x86 Macs:
+## Building from Source
 
-```bash
-sudo cp ../init/launchd/homebrew.mxcl.et.plist /Library/LaunchDaemons/homebrew.mxcl.et.plist
-sudo launchctl load -w /Library/LaunchDaemons/homebrew.mxcl.et.plist
-```
+### Dependencies
 
-Alternatively, a package is available in MacPorts:
+| OS | Command |
+|----|---------|
+| **Debian/Ubuntu** | `sudo apt install build-essential cmake ninja-build git libsodium-dev libprotobuf-dev protobuf-compiler libutempter-dev libcurl4-openssl-dev pkg-config` |
+| **Fedora** | `sudo dnf install cmake gcc-c++ git libsodium-devel protobuf-devel protobuf-compiler gflags-devel libcurl-devel` |
+| **macOS** | `brew install cmake libsodium protobuf` |
+| **Alpine** | `apk add build-base cmake git libsodium-dev protobuf-dev openssl-dev zlib-dev` |
 
-```bash
-sudo port install et
-```
-
-### Ubuntu
-
-For Ubuntu, use our PPA:
+### Build
 
 ```bash
-sudo add-apt-repository ppa:jgmath2000/et
-sudo apt-get update
-sudo apt-get install et
-```
-
-Or see "Debian/Ubuntu" below to install and build from source (e.g., for ARM).
-
-### Debian
-
-For Debian, use our deb repo:
-
-```bash
-echo "deb [signed-by=/etc/apt/keyrings/et.gpg] https://mistertea.github.io/debian-et/debian-source/ $(grep VERSION_CODENAME /etc/os-release | cut -d= -f2) main" | sudo tee -a /etc/apt/sources.list.d/et.list
-sudo mkdir -m 0755 -p /etc/apt/keyrings # only if you're using Debian 11 or older
-curl -sSL https://github.com/MisterTea/debian-et/raw/master/et.gpg | sudo tee /etc/apt/keyrings/et.gpg >/dev/null
-sudo apt update
-sudo apt install et
-```
-
-### CentOS 7
-
-Up to the present day the only way to install is to [build from source](#centos-7-1).
-
-### CentOS 8
-
-```bash
-sudo dnf install epel-release
-sudo dnf install et
-```
-
-### FreeBSD
-
-On FreeBSD, use:
-
-```bash
-pkg install eternalterminal
-```
-
-### Fedora (version 29 and later):
-
-```bash
-sudo dnf install et
-```
-
-### openSUSE
-
-```bash
-zypper ar -f obs://network
-zypper ref
-zypper in EternalTerminal
-```
-
-### Other Linux
-
-Install dependencies:
-
-- Fedora (tested on 25):
-
-  ```bash
-  sudo dnf install boost-devel libsodium-devel protobuf-devel \
-  	protobuf-compiler cmake gflags-devel libcurl-devel
-  ```
-
-- Gentoo:
-
-  ```bash
-  sudo emerge dev-libs/boost dev-libs/libsodium \
-  	dev-libs/protobuf dev-util/cmake dev-cpp/gflags
-  ```
-
-Download and install from source:
-
-```bash
-git clone --recurse-submodules --depth 1 https://github.com/MisterTea/EternalTerminal.git
+git clone --recurse-submodules https://github.com/dmikushin/EternalTerminal.git
 cd EternalTerminal
-mkdir build
-cd build
-cmake ../
-make
+mkdir build && cd build
+cmake .. -DDISABLE_VCPKG=ON -DDISABLE_TELEMETRY=ON
+make -j$(nproc)
 sudo make install
 ```
 
-### Windows
-
-Eternal Terminal works under WSL (Windows Subsystem for Linux). Follow the ubuntu instructions.
-
-### Docker Image
-
-See [docker/README.md](docker/)
+For Alpine/musl, add `-DWITH_STACKTRACE=OFF` (musl lacks `backtrace(3)`).
 
 ## Verifying
 
-Verify that the client is installed correctly by looking for the `et` executable: `which et`.
-
-Verify that the server is installed correctly by checking the service status: `systemctl status et`. On some operating systems, you may need to enable and start the service manually: `sudo systemctl enable --now et`.
-
-You are ready to start using ET!
+- Client: `which et`
+- Server: `systemctl status et` (enable with `sudo systemctl enable --now et`)
 
 ## Configuring
 
-If you'd like to modify the server settings (e.g. to change the listening port), edit /etc/et.cfg.
+Edit `/etc/et.cfg` to change server settings (e.g. listening port).
 
 ## Using
 
-ET uses ssh for handshaking and encryption, so you must be able to ssh into the machine from the client. Make sure that you can `ssh user@hostname`.
-
-ET uses TCP, so you need an open port on your server. By default, it uses 2022.
-
-
-Once you have an open port, the syntax is similar to ssh. Username is default to the current username starting the et process, use `-u` or `user@` to specify a different one if necessary.
+ET uses SSH for handshaking and encryption. Make sure `ssh user@hostname` works first. ET uses TCP port 2022 by default.
 
 ```bash
-et hostname (etserver running on default port 2022, username is the same as current)
-et user@hostname:8000 (etserver running on port 8000, different user)
+et hostname                          # default port 2022
+et user@hostname:8000                # custom port, explicit user
+et hostname --jumphost jump_host     # via jumphost
 ```
 
-You can specify a jumphost and the port et is running on jumphost using `--jumphost` and `--jport`. If no `--jport` is given, et will try to connect to default port 2022.
-
-```bash
-et hostname -jumphost jump_hostname (etserver running on port 2022 on both hostname and jumphost)
-et hostname:8888 --jumphost jump_hostname --jport 9999
-```
-
-Additional arguments that et accepts are port forwarding with syntax identical to `ssh(1)`:
+### Port forwarding (identical to ssh)
 
 ```bash
 # Local forward (-L): binds locally, connects on the server side
@@ -193,26 +101,25 @@ et -L 8080:db:5432 -R 9090:localhost:3000 -D 1080 hostname
 
 # Additional flags
 et -g ...           # gateway ports: default bind 0.0.0.0 instead of 127.0.0.1
-et --exit-on-forward-failure ...   # exit if any forward fails (like ssh ExitOnForwardFailure=yes)
+et --exit-on-forward-failure ...   # exit if any forward fails (ssh ExitOnForwardFailure=yes)
 ```
 
 ET-style port pairs (`-L "18000:8000,18001-18003:8001-8003"`) are also accepted for backward compatibility. Dynamic port allocation (`-L 0:host:port`) is supported and the assigned port is printed on stderr.
 
-During a session, OpenSSH-style escape sequences are available (type at the start of a line):
-- `~C` — open a command line to add/cancel forwards at runtime (`-L`, `-R`, `-KL port`, `-KR port`)
-- `~.` — terminate the session
-- `~?` — print help
-- `~~` — send a literal `~`
+### Escape sequences (identical to ssh)
 
-A command to run immediately after the connection is setup can be passed through `-c`.
+Type at the start of a line during a session:
 
-Starting from the latest release, et supports parsing both user-specific and system-wide SSH config files.
-The config file is required when your sshd on server/jumphost is listening on a port which is not 22.
-Here is an example SSH config file showing how to setup when
+| Sequence | Action |
+|----------|--------|
+| `~C` | Open a command line to add/cancel forwards (`-L`, `-R`, `-KL port`, `-KR port`) |
+| `~.` | Terminate the session |
+| `~?` | Print help |
+| `~~` | Send a literal `~` |
 
-- there is a jumphost in the middle
-- sshd is listening on a port that is not 22
-- connecting to a different username other than the current one.
+### SSH config
+
+ET parses `~/.ssh/config` and `/etc/ssh/ssh_config`:
 
 ```ssh-config
 Host dev
@@ -222,139 +129,18 @@ Host dev
   ProxyJump user@jumphost.example.org:22
 ```
 
-With the ssh config file set as above, you can simply call et with
-
 ```bash
-et dev (etserver running on port 2022 on both hostname and jumphost)
-et dev:8000 -jport 9000 (etserver running on port 9000 on jumphost)
+et dev              # uses config above
+et dev:8000         # override etserver port
 ```
-
-## Building from Source
-
-### macOS
-
-To build Eternal Terminal on Mac, install its dependencies with Homebrew:
-
-```bash
-brew install autoconf automake libtool
-git clone --recurse-submodules --depth 1 https://github.com/MisterTea/EternalTerminal.git
-cd EternalTerminal
-mkdir build
-cd build
-cmake ../
-make -j$(nproc) && sudo make install
-```
-
-To run an `et` server for testing, run `./etserver`. To run an `et`
-server daemon persistently across reboots:
-
-```bash
-sudo cp ../init/launchd/homebrew.mxcl.et.plist /Library/LaunchDaemons
-sudo launchctl load -w /Library/LaunchDaemons/homebrew.mxcl.et.plist
-```
-
-### Debian/Ubuntu
-
-Grab the deps and then follow this process.
-
-Debian/Ubuntu Dependencies:
-
-```bash
-sudo apt install libsodium-dev autoconf libtool \
-	libprotobuf-dev protobuf-compiler libutempter-dev libcurl4-openssl-dev \
-    build-essential ninja-build cmake git zip pkg-config
-```
-
-Fetch source, build and install:
-
-```bash
-git clone --recurse-submodules --depth 1 https://github.com/MisterTea/EternalTerminal.git
-cd EternalTerminal
-mkdir build
-cd build
-# For ARM (including OS/X with apple silicon):
-if [[ $(uname -a | grep 'arm\|aarch64') ]]; then export VCPKG_FORCE_SYSTEM_BINARIES=1; fi
-cmake -DCPACK_GENERATOR=DEB ../
-make -j$(nproc) package
-sudo dpkg --install *.deb
-```
-
-Once built, the binary only requires `libprotobuf-dev`.
-
-Disable et server by `sudo systemctl disable --now et`
-
-### CentOS 7
-
-Install dependencies:
-
-```bash
-sudo yum install epel-release
-sudo yum install cmake3 boost-devel libsodium-devel protobuf-devel \
-     protobuf-compiler gflags-devel protobuf-lite-devel libcurl-devel \
-     perl-IPC-Cmd perl-Data-Dumper libunwind-devel libutempter-devel
-```
-
-Install scl dependencies
-
-```bash
-sudo yum install centos-release-scl
-sudo yum install devtoolset-11 devtoolset-11-libatomic-devel rh-git227
-```
-
-Download and install from source ([see #238 for details](https://github.com/MisterTea/EternalTerminal/issues/238)):
-
-```bash
-git clone --recurse-submodules --depth 1 https://github.com/MisterTea/EternalTerminal.git
-cd EternalTerminal
-mkdir build
-cd build
-scl enable devtoolset-11 rh-git227 'cmake3 ../'
-scl enable devtoolset-11 'make && sudo make install'
-sudo cp ../systemctl/et.service /etc/systemd/system/
-sudo cp ../etc/et.cfg /etc/
-```
-
-Find the actual location of et:
-
-```bash
-which etserver
-```
-
-Correct the service file (see [#180](https://github.com/MisterTea/EternalTerminal/issues/180) for details).
-
-```bash
-sudo sed -ie "s|ExecStart=[^[:space:]]*[[:space:]]|ExecStart=$(which etserver) |" /etc/systemd/system/et.service
-```
-
-Alternatively, open the file /etc/systemd/system/et.service in an editor and correct the `ExectStart=...` line to point to the correct path of the `etserver` binary.
-
-
-```
-ExecStart=/usr/local/bin/etserver --cfgfile=/etc/et.cfg --logtostdout
-```
-
-Reload systemd configs:
-
-```bash
-sudo systemctl daemon-reload
-```
-
-Start the et service:
-
-```bash
-sudo systemctl enable --now et.service
-```
-
-## Building using Docker
-
-Builder Dockerfiles are located at [deployment/](deployment/). Supported OSes: CentOS 8, openSUSE and Ubuntu.
 
 ## Reporting issues
 
-If you have any problems with installation or usage, please [file an issue on GitHub](https://github.com/MisterTea/EternalTerminal/issues).
+Please [file an issue](https://github.com/dmikushin/EternalTerminal/issues).
 
 ## Developers
 
-- Jason Gauci: https://github.com/MisterTea
-- Ailing Zhang: https://github.com/ailzhang
-- James Short: https://github.com/jshort
+- Jason Gauci (upstream): https://github.com/MisterTea
+- Ailing Zhang (upstream): https://github.com/ailzhang
+- James Short (upstream): https://github.com/jshort
+- Dmitry Mikushin (this fork): https://github.com/dmikushin
