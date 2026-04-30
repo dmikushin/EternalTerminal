@@ -171,7 +171,40 @@ et hostname -jumphost jump_hostname (etserver running on port 2022 on both hostn
 et hostname:8888 --jumphost jump_hostname --jport 9999
 ```
 
-Additional arguments that et accepts are port forwarding pairs with option `-L 18000:host:8000` (identical to `ssh -L`; ET-style pairs like `-L "18000:8000,18001-18003:8001-8003"` are also accepted), `-R` for remote forwards, and a command to run immediately after the connection is setup through `-c`.
+Additional arguments that et accepts are port forwarding with syntax identical to `ssh(1)`:
+
+```bash
+# Local forward (-L): binds locally, connects on the server side
+et -L 8080:remote-db:5432 hostname
+et -L 127.0.0.1:8080:remote-db:5432 hostname   # explicit bind address
+et -L /tmp/local.sock:remote-db:5432 hostname   # UNIX-domain source
+et -L 8080:/var/run/remote.sock hostname         # UNIX-domain destination
+
+# Remote forward (-R): binds on the server, connects on the client side
+et -R 9090:localhost:3000 hostname
+et -R 0.0.0.0:9090:localhost:3000 hostname       # wildcard bind on server
+
+# Dynamic forward (-D): built-in SOCKS5 proxy
+et -D 1080 hostname                              # SOCKS5 on 127.0.0.1:1080
+et -D '*:1080' hostname                          # SOCKS5 on all interfaces
+
+# Multiple forwards in one command
+et -L 8080:db:5432 -R 9090:localhost:3000 -D 1080 hostname
+
+# Additional flags
+et -g ...           # gateway ports: default bind 0.0.0.0 instead of 127.0.0.1
+et --exit-on-forward-failure ...   # exit if any forward fails (like ssh ExitOnForwardFailure=yes)
+```
+
+ET-style port pairs (`-L "18000:8000,18001-18003:8001-8003"`) are also accepted for backward compatibility. Dynamic port allocation (`-L 0:host:port`) is supported and the assigned port is printed on stderr.
+
+During a session, OpenSSH-style escape sequences are available (type at the start of a line):
+- `~C` — open a command line to add/cancel forwards at runtime (`-L`, `-R`, `-KL port`, `-KR port`)
+- `~.` — terminate the session
+- `~?` — print help
+- `~~` — send a literal `~`
+
+A command to run immediately after the connection is setup can be passed through `-c`.
 
 Starting from the latest release, et supports parsing both user-specific and system-wide SSH config files.
 The config file is required when your sshd on server/jumphost is listening on a port which is not 22.
